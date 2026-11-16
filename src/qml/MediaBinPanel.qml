@@ -102,7 +102,7 @@ Rectangle {
                 states: State {
                     when: assetDragArea.drag.active
                     ParentChange { target: assetCard; parent: win.contentItem }
-                    PropertyChanges { target: assetCard; z: 500; opacity: 0.85 }
+                    PropertyChanges { assetCard.z: 500; assetCard.opacity: 0.85 }
                 }
 
                 ColumnLayout {
@@ -115,8 +115,8 @@ Rectangle {
                         spacing: 8
 
                         Rectangle {
-                            width: 64
-                            height: 36
+                            Layout.preferredWidth: 64
+                            Layout.preferredHeight: 36
                             radius: Design.rXs
                             color: Design.surfaceSunken
                             clip: true

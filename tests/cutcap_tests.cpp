@@ -942,6 +942,11 @@ private slots:
         auto *strip = firstVisible("clipStrip");
         QVERIFY2(strip, "video clips must show filmstrip frames");
         QVERIFY(strip->childItems().first()->property("source").toUrl().isLocalFile());
+        // The tile size comes from the clip map, so the strip cannot silently crop a 1x1 pixel.
+        auto *tile = strip->childItems().first();
+        QVERIFY2(tile->property("tileWidth").toInt() > 1 && tile->property("tileHeight").toInt() > 1,
+                 "the filmstrip tile size must reach QML from the clip map");
+        QCOMPARE(int(tile->property("sourceClipRect").toRectF().width()), tile->property("tileWidth").toInt());
 
         // An audio file dropped on the bin lands on A1 and draws its waveform.
         const QString wav = dir.path() + "/tone.wav";

@@ -170,8 +170,8 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         enabled: !win.isTyping && !exportDialog.opened && !shortcutsDialog.opened &&
-                 !importDialog.opened && !saveProjectDialog.opened &&
-                 !openProjectDialog.opened && !importSrtDialog.opened && !exportSrtDialog.opened
+                 !importDialog.visible && !saveProjectDialog.visible &&
+                 !openProjectDialog.visible && !importSrtDialog.visible && !exportSrtDialog.visible
         context: Qt.ApplicationShortcut
         onActivated: backend.clearClipSelection()
     }

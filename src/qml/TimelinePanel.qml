@@ -79,7 +79,7 @@ Rectangle {
                 onClicked: backend.deleteSelected(true)
             }
 
-            Rectangle { width: 1; height: 18; color: Design.borderHairline }
+            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
 
             ActionButton {
                 text: "+ Text"
@@ -771,12 +771,14 @@ Rectangle {
                     model: strip.visible && strip.tileWidth > 0 ? Math.ceil(clipBox.width / strip.tileWidth) : 0
                     delegate: Image {
                         readonly property int frames: clipData.filmstripFrames || 1
+                        readonly property int tileWidth: clipData.filmstripTileWidth || 1
+                        readonly property int tileHeight: clipData.filmstripTileHeight || 1
                         readonly property int frameIndex: Math.max(0, Math.min(frames - 1,
                             Math.floor(clipBox.sourceTimeAt((index + 0.5) * strip.tileWidth) / clipBox.sourceDuration * frames)))
                         width: strip.tileWidth
                         height: strip.height
                         source: "file://" + clipData.filmstripPath
-                        sourceClipRect: Qt.rect(frameIndex * 128, 0, 128, 72)
+                        sourceClipRect: Qt.rect(frameIndex * tileWidth, 0, tileWidth, tileHeight)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true

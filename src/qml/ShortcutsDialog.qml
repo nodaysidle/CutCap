@@ -46,7 +46,7 @@ Dialog {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: Design.borderHairline }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.borderHairline }
 
         ScrollView {
             Layout.fillWidth: true
@@ -107,7 +107,7 @@ Dialog {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: Design.borderHairline }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.borderHairline }
 
         RowLayout {
             Layout.fillWidth: true

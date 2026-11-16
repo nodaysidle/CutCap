@@ -368,6 +368,8 @@ QVariantList Backend::clipsList() const {
             map["thumbnailPath"] = asset.thumbnailPath;
             map["filmstripPath"] = asset.filmstripPath;
             map["filmstripFrames"] = asset.kind == "image" ? 1 : MediaEngine::kFilmstripFrames;
+            map["filmstripTileWidth"] = MediaEngine::kFilmstripTileWidth;
+            map["filmstripTileHeight"] = MediaEngine::kFilmstripTileHeight;
             map["hasAudio"] = asset.hasAudio;
             QVariantList peaks;
             for (double p : asset.waveformPeaks)

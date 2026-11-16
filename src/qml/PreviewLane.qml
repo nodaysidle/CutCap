@@ -21,7 +21,7 @@ Item {
                                                  || lane.blur > 0.5
                                                  || lane.vignette === true
                                                  || lane.chromaKey === true)
-    readonly property alias player: player
+    readonly property alias player: mediaPlayer
 
     visible: active && !audioOnly
 
@@ -38,32 +38,32 @@ Item {
     function sync(forceSeek) {
         const d = currentLane()
         if (!d.active || d.isImage) {
-            if (player.playbackState === MediaPlayer.PlayingState)
-                player.pause()
+            if (mediaPlayer.playbackState === MediaPlayer.PlayingState)
+                mediaPlayer.pause()
             return
         }
-        if (player.source.toString() !== d.url) {
-            player.source = d.url
+        if (mediaPlayer.source.toString() !== d.url) {
+            mediaPlayer.source = d.url
             return
         }
-        if (player.mediaStatus === MediaPlayer.NoMedia || player.mediaStatus === MediaPlayer.LoadingMedia)
+        if (mediaPlayer.mediaStatus === MediaPlayer.NoMedia || mediaPlayer.mediaStatus === MediaPlayer.LoadingMedia)
             return
 
         const playingClock = backend.playing && backend.clockLane === role
-        const drift = Math.abs(player.position - d.positionMs)
+        const drift = Math.abs(mediaPlayer.position - d.positionMs)
         let seeked = false
         if (forceSeek ? drift > 15 : (!playingClock && drift > 300)) {
-            player.position = d.positionMs
+            mediaPlayer.position = d.positionMs
             seeked = true
         }
 
         if (backend.playing) {
-            const ended = player.mediaStatus === MediaPlayer.EndOfMedia && !seeked
-            if (player.playbackState !== MediaPlayer.PlayingState && !ended)
-                player.play()
-        } else if (player.playbackState !== MediaPlayer.PausedState) {
+            const ended = mediaPlayer.mediaStatus === MediaPlayer.EndOfMedia && !seeked
+            if (mediaPlayer.playbackState !== MediaPlayer.PlayingState && !ended)
+                mediaPlayer.play()
+        } else if (mediaPlayer.playbackState !== MediaPlayer.PausedState) {
             // pause() from StoppedState decodes and shows the frame at position without audio.
-            player.pause()
+            mediaPlayer.pause()
         }
     }
 
@@ -79,7 +79,7 @@ Item {
     }
 
     MediaPlayer {
-        id: player
+        id: mediaPlayer
         audioOutput: audioOut
         videoOutput: root.audioOnly ? null : (root.processed ? processor.videoSink : videoOut)
         playbackRate: root.active ? root.lane.speed : 1.0
