@@ -542,8 +542,7 @@ QStringList MediaEngine::buildExportArgs(const Project &project, const QString &
             vf << "vignette";
 
         if (c.bgRemovalMode == "chromakey") {
-            QString hex = c.chromaColor;
-            hex.remove('#');
+            const QString hex = QColor(sanitizedChromaColor(c.chromaColor)).name(QColor::HexRgb).mid(1);
             vf << QString("chromakey=0x%1:%2:%3")
                       .arg(hex)
                       .arg(c.chromaSimilarity, 0, 'f', 3)

@@ -1527,6 +1527,72 @@ private slots:
                  "a ripple on V1 must not move the audio lane");
     }
 
+    void testRejectsInjectedChromaColor() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.path() + "/evil.cutcap";
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"version":1,"clips":[{"id":"clip_evil","sourcePath":"/tmp/demo.mp4","kind":"video",)"
+                R"("durationSec":4.0,"bgRemovalMode":"chromakey",)"
+                R"("chromaColor":"00ff00,metadata=mode=print:file=/home/arch/x"}]})");
+        f.close();
+
+        bool ok = false;
+        const Project p = Project::loadFromFile(path, &ok);
+        QVERIFY(ok);
+        QCOMPARE(p.clips.size(), 1);
+        QCOMPARE(p.clips[0].chromaColor, QString("#00ff00"));
+        QCOMPARE(sanitizedChromaColor("00ff00,metadata=mode=print:file=/home/arch/x"), QString("#00ff00"));
+        QCOMPARE(sanitizedChromaColor("00FF00"), QString("#00ff00"));
+        QCOMPARE(sanitizedChromaColor("#123abc"), QString("#123abc"));
+
+        const QStringList args = MediaEngine::buildExportArgs(p, "/tmp/out.mp4", ExportOptions{}, {});
+        const QString joined = args.join(" ");
+        QVERIFY2(joined.contains("chromakey=0x00ff00"), qPrintable(joined));
+        QVERIFY2(!joined.contains("metadata="), qPrintable(joined));
+    }
+
+    void testFromJsonClampsRanges() {
+        QJsonObject clip{
+            {"id", "c1"},
+            {"track", 7},
+            {"speed", 0},
+            {"durationSec", 0},
+            {"sourceDurationSec", -4},
+            {"volume", -1},
+            {"brightness", 9},
+            {"contrast", -2},
+            {"saturation", 5},
+            {"blur", -3},
+            {"chromaSimilarity", 99},
+            {"chromaBlend", 4},
+            {"keyframes", QJsonArray{QJsonObject{{"timeSec", -2}, {"opacity", 7}}}},
+        };
+        QJsonObject obj{{"width", 0}, {"height", 9001}, {"fps", 0}, {"clips", QJsonArray{clip}}};
+
+        const Project p = Project::fromJson(obj);
+        QCOMPARE(p.width, 16);
+        QCOMPARE(p.height, 8192);
+        QCOMPARE(p.fps, 1.0);
+        QCOMPARE(p.clips.size(), 1);
+        const TimelineClip &c = p.clips[0];
+        QCOMPARE(c.track, 2);
+        QCOMPARE(c.speed, 0.25);
+        QCOMPARE(c.durationSec, 0.1);
+        QCOMPARE(c.sourceDurationSec, 0.1);
+        QCOMPARE(c.volume, 0.0);
+        QCOMPARE(c.brightness, 0.5);
+        QCOMPARE(c.contrast, 0.5);
+        QCOMPARE(c.saturation, 2.0);
+        QCOMPARE(c.blur, 0.0);
+        QCOMPARE(c.chromaSimilarity, 0.6);
+        QCOMPARE(c.chromaBlend, 0.5);
+        QCOMPARE(c.keyframes.size(), 1);
+        QCOMPARE(c.keyframes[0].timeSec, 0.0);
+        QCOMPARE(c.keyframes[0].opacity, 1.0);
+    }
+
     void splitAtPlayheadSplitsWholeSelection() {
         QTemporaryDir dir;
         const QString vid = makeSampleVideo(dir.path(), "split.mp4", "white", 3.0);

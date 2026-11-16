@@ -1095,7 +1095,7 @@ void Backend::updateClipProperty(const QString &clipId, const QString &key, cons
     else if (key == "audioNormalize") c.audioNormalize = value.toBool();
     else if (key == "audioCompress") c.audioCompress = value.toBool();
     else if (key == "bgRemovalMode") c.bgRemovalMode = value.toString();
-    else if (key == "chromaColor") c.chromaColor = value.toString();
+    else if (key == "chromaColor") c.chromaColor = sanitizedChromaColor(value.toString());
     else if (key == "chromaSimilarity") c.chromaSimilarity = std::clamp(value.toDouble(), 0.01, 0.6);
     else if (key == "chromaBlend") c.chromaBlend = std::clamp(value.toDouble(), 0.0, 0.5);
     else if (key == "track") c.track = std::clamp(value.toInt(), 0, 2);

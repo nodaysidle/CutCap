@@ -1,11 +1,33 @@
 #include "project.h"
 
+#include <QColor>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <algorithm>
 #include <cmath>
+
+QString sanitizedChromaColor(const QString &raw) {
+    static const QRegularExpression re(QStringLiteral("^#?[0-9A-Fa-f]{6}$"));
+    const QString trimmed = raw.trimmed();
+    if (!re.match(trimmed).hasMatch())
+        return QStringLiteral("#00ff00");
+    QString normalized = trimmed;
+    if (normalized.startsWith(QLatin1Char('#')))
+        normalized.remove(0, 1);
+    return QColor(QStringLiteral("#") + normalized).name();
+}
+
+namespace {
+
+int evenDimension(int v) {
+    const int clamped = std::clamp(v, 16, 8192);
+    return clamped - (clamped % 2);
+}
+
+}
 
 QJsonObject Keyframe::toJson() const {
     return QJsonObject{
@@ -20,12 +42,12 @@ QJsonObject Keyframe::toJson() const {
 
 Keyframe Keyframe::fromJson(const QJsonObject &obj) {
     Keyframe k;
-    k.timeSec = obj.value("timeSec").toDouble(0.0);
-    k.x = obj.value("x").toDouble(0.5);
-    k.y = obj.value("y").toDouble(0.5);
-    k.scale = obj.value("scale").toDouble(1.0);
-    k.opacity = obj.value("opacity").toDouble(1.0);
-    k.rotation = obj.value("rotation").toDouble(0.0);
+    k.timeSec = std::max(0.0, obj.value("timeSec").toDouble(0.0));
+    k.x = std::clamp(obj.value("x").toDouble(0.5), 0.0, 1.0);
+    k.y = std::clamp(obj.value("y").toDouble(0.5), 0.0, 1.0);
+    k.scale = std::clamp(obj.value("scale").toDouble(1.0), 0.1, 3.0);
+    k.opacity = std::clamp(obj.value("opacity").toDouble(1.0), 0.0, 1.0);
+    k.rotation = std::clamp(obj.value("rotation").toDouble(0.0), -180.0, 180.0);
     return k;
 }
 
@@ -55,10 +77,10 @@ MediaAsset MediaAsset::fromJson(const QJsonObject &obj) {
     a.path = obj.value("path").toString();
     a.name = obj.value("name").toString();
     a.kind = obj.value("kind").toString("video");
-    a.durationSec = obj.value("durationSec").toDouble(5.0);
-    a.width = obj.value("width").toInt(1920);
-    a.height = obj.value("height").toInt(1080);
-    a.fps = obj.value("fps").toDouble(30.0);
+    a.durationSec = std::max(0.1, obj.value("durationSec").toDouble(5.0));
+    a.width = evenDimension(obj.value("width").toInt(1920));
+    a.height = evenDimension(obj.value("height").toInt(1080));
+    a.fps = std::clamp(obj.value("fps").toDouble(30.0), 1.0, 240.0);
     a.hasAudio = obj.value("hasAudio").toBool(true);
     a.thumbnailPath = obj.value("thumbnailPath").toString();
     a.filmstripPath = obj.value("filmstripPath").toString();
@@ -148,29 +170,29 @@ TimelineClip TimelineClip::fromJson(const QJsonObject &obj) {
     c.sourcePath = obj.value("sourcePath").toString();
     c.name = obj.value("name").toString();
     c.kind = obj.value("kind").toString("video");
-    c.track = obj.value("track").toInt(0);
-    c.timelineStartSec = obj.value("timelineStartSec").toDouble(0.0);
-    c.sourceInSec = obj.value("sourceInSec").toDouble(0.0);
-    c.durationSec = obj.value("durationSec").toDouble(5.0);
-    c.sourceDurationSec = obj.value("sourceDurationSec").toDouble(c.durationSec);
-    c.speed = obj.value("speed").toDouble(1.0);
-    c.volume = obj.value("volume").toDouble(1.0);
+    c.track = std::clamp(obj.value("track").toInt(0), 0, 2);
+    c.timelineStartSec = std::max(0.0, obj.value("timelineStartSec").toDouble(0.0));
+    c.sourceInSec = std::max(0.0, obj.value("sourceInSec").toDouble(0.0));
+    c.durationSec = std::max(0.1, obj.value("durationSec").toDouble(5.0));
+    c.sourceDurationSec = std::max(0.1, obj.value("sourceDurationSec").toDouble(c.durationSec));
+    c.speed = std::clamp(obj.value("speed").toDouble(1.0), 0.25, 4.0);
+    c.volume = std::clamp(obj.value("volume").toDouble(1.0), 0.0, 2.0);
     c.muted = obj.value("muted").toBool(false);
-    c.brightness = obj.value("brightness").toDouble(0.0);
-    c.contrast = obj.value("contrast").toDouble(1.0);
-    c.saturation = obj.value("saturation").toDouble(1.0);
-    c.blur = obj.value("blur").toDouble(0.0);
+    c.brightness = std::clamp(obj.value("brightness").toDouble(0.0), -0.5, 0.5);
+    c.contrast = std::clamp(obj.value("contrast").toDouble(1.0), 0.5, 2.0);
+    c.saturation = std::clamp(obj.value("saturation").toDouble(1.0), 0.0, 2.0);
+    c.blur = std::clamp(obj.value("blur").toDouble(0.0), 0.0, 20.0);
     c.vignette = obj.value("vignette").toBool(false);
     c.transitionIn = obj.value("transitionIn").toString("none");
-    c.transitionDurationSec = obj.value("transitionDurationSec").toDouble(0.5);
+    c.transitionDurationSec = std::clamp(obj.value("transitionDurationSec").toDouble(0.5), 0.1, 3.0);
     c.audioDenoise = obj.value("audioDenoise").toBool(false);
     c.audioVoiceClarity = obj.value("audioVoiceClarity").toBool(false);
     c.audioNormalize = obj.value("audioNormalize").toBool(false);
     c.audioCompress = obj.value("audioCompress").toBool(false);
     c.bgRemovalMode = obj.value("bgRemovalMode").toString("none");
-    c.chromaColor = obj.value("chromaColor").toString("#00ff00");
-    c.chromaSimilarity = obj.value("chromaSimilarity").toDouble(0.18);
-    c.chromaBlend = obj.value("chromaBlend").toDouble(0.08);
+    c.chromaColor = sanitizedChromaColor(obj.value("chromaColor").toString("#00ff00"));
+    c.chromaSimilarity = std::clamp(obj.value("chromaSimilarity").toDouble(0.18), 0.01, 0.6);
+    c.chromaBlend = std::clamp(obj.value("chromaBlend").toDouble(0.08), 0.0, 0.5);
     c.processedPath = obj.value("processedPath").toString();
     const auto arr = obj.value("keyframes").toArray();
     for (const auto &v : arr)
@@ -200,14 +222,14 @@ TextOverlay TextOverlay::fromJson(const QJsonObject &obj) {
     t.id = obj.value("id").toString();
     t.text = obj.value("text").toString("Title");
     t.isCaption = obj.value("isCaption").toBool(false);
-    t.startSec = obj.value("startSec").toDouble(0.0);
-    t.durationSec = obj.value("durationSec").toDouble(3.0);
+    t.startSec = std::max(0.0, obj.value("startSec").toDouble(0.0));
+    t.durationSec = std::max(0.1, obj.value("durationSec").toDouble(3.0));
     t.x = obj.value("x").toDouble(0.5);
     t.y = obj.value("y").toDouble(0.82);
     t.fontSize = obj.value("fontSize").toInt(44);
     t.color = obj.value("color").toString("#eceff4");
     t.bgColor = obj.value("bgColor").toString("#090a0c");
-    t.bgOpacity = obj.value("bgOpacity").toDouble(0.65);
+    t.bgOpacity = std::clamp(obj.value("bgOpacity").toDouble(0.65), 0.0, 1.0);
     t.bold = obj.value("bold").toBool(true);
     return t;
 }
@@ -274,9 +296,9 @@ QJsonObject Project::toJson() const {
 Project Project::fromJson(const QJsonObject &obj) {
     Project p;
     p.title = obj.value("title").toString("Untitled Project");
-    p.width = obj.value("width").toInt(1920);
-    p.height = obj.value("height").toInt(1080);
-    p.fps = obj.value("fps").toDouble(30.0);
+    p.width = evenDimension(obj.value("width").toInt(1920));
+    p.height = evenDimension(obj.value("height").toInt(1080));
+    p.fps = std::clamp(obj.value("fps").toDouble(30.0), 1.0, 240.0);
     const auto laneArr = obj.value("lanes").toArray();
     for (int i = 0; i < 3 && i < laneArr.size(); ++i)
         p.lanes[i] = LaneState::fromJson(laneArr[i].toObject());

@@ -6,6 +6,10 @@
 #include <QString>
 #include <QVector>
 
+// Chroma values reach the ffmpeg filtergraph, so only a plain six-digit hex colour is accepted.
+// Returns "#rrggbb" for valid input (with or without a leading '#'), otherwise "#00ff00".
+QString sanitizedChromaColor(const QString &raw);
+
 struct Keyframe {
     double timeSec = 0.0;
     double x = 0.5;
