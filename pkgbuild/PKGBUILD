@@ -6,11 +6,17 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/nodaysidle/CutCap"
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-svg' 'qt6-wayland' 'ffmpeg' 'pipewire')
-makedepends=()
+makedepends=('qt6-base' 'qt6-declarative' 'qt6-multimedia')
+
+build() {
+    mkdir -p "$srcdir/build"
+    cd "$srcdir/build"
+    qmake6 "$startdir/../cutcap.pro"
+    make
+}
 
 package() {
-    local root="${startdir}/.."
-    install -Dm755 "$root/build/cutcap" "$pkgdir/usr/bin/cutcap"
+    install -Dm755 "$srcdir/build/cutcap" "$pkgdir/usr/bin/cutcap"
     install -Dm644 "$startdir/cutcap.desktop" "$pkgdir/usr/share/applications/cutcap.desktop"
     install -Dm644 "$startdir/cutcap.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/cutcap.svg"
 }

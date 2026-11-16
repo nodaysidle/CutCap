@@ -2,15 +2,16 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-mkdir -p "$ROOT/build"
-cd "$ROOT/build"
+BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
 
 qmake6 "$ROOT/cutcap.pro"
 make -j"$(nproc)"
 
 # The module's type info is what qmllint reads; keep the committed copy in step with the build.
-if [ -f "$ROOT/build/cutcap.qmltypes" ]; then
-    cp -f "$ROOT/build/cutcap.qmltypes" "$ROOT/cutcap.qmltypes"
+if [ -f "$BUILD_DIR/cutcap.qmltypes" ]; then
+    cp -f "$BUILD_DIR/cutcap.qmltypes" "$ROOT/cutcap.qmltypes"
 fi
 
-echo "Built $ROOT/build/cutcap"
+echo "Built $BUILD_DIR/cutcap"
