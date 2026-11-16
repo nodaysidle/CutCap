@@ -484,6 +484,7 @@ void Backend::refreshCapabilities() {
 }
 
 void Backend::newProject() {
+    ++m_jobGeneration;
     m_undoStack.clear();
     m_redoStack.clear();
     m_project = Project();
@@ -504,6 +505,7 @@ void Backend::newProject() {
 }
 
 bool Backend::openProject(const QString &pathOrUrl) {
+    ++m_jobGeneration;
     const QString path = normalizeLocalPath(pathOrUrl);
     bool ok = false;
     QString err;
@@ -627,6 +629,7 @@ void Backend::importAssetAsync(const QString &pathOrUrl, const std::function<voi
 
     ++m_importing;
     emit importStateChanged();
+    const int generation = m_jobGeneration;
     auto future = QtConcurrent::run([path]() -> std::pair<MediaAsset, QString> {
         QString err;
         MediaAsset asset = MediaEngine::probeMedia(path, &err);
@@ -634,11 +637,15 @@ void Backend::importAssetAsync(const QString &pathOrUrl, const std::function<voi
     });
     auto *watcher = new QFutureWatcher<std::pair<MediaAsset, QString>>(this);
     connect(watcher, &QFutureWatcher<std::pair<MediaAsset, QString>>::finished, this,
-            [this, watcher, onReady] {
+            [this, watcher, onReady, generation] {
                 const auto res = watcher->result();
                 watcher->deleteLater();
                 --m_importing;
                 emit importStateChanged();
+                if (generation != m_jobGeneration) {
+                    onReady({});
+                    return;
+                }
                 if (!res.second.isEmpty()) {
                     fail(res.second);
                     onReady({});
@@ -659,17 +666,20 @@ void Backend::importAssetAsync(const QString &pathOrUrl, const std::function<voi
 void Backend::startPreviewJob(const MediaAsset &asset) {
     ++m_importing;
     emit importStateChanged();
+    const int assetGeneration = m_jobGeneration;
     auto future = QtConcurrent::run([asset]() {
         MediaAsset prepared = asset;
         MediaEngine::preparePreviews(prepared);
         return prepared;
     });
     auto *watcher = new QFutureWatcher<MediaAsset>(this);
-    connect(watcher, &QFutureWatcher<MediaAsset>::finished, this, [this, watcher, assetId = asset.id] {
+    connect(watcher, &QFutureWatcher<MediaAsset>::finished, this, [this, watcher, assetId = asset.id, assetGeneration] {
         const MediaAsset prepared = watcher->result();
         watcher->deleteLater();
         --m_importing;
         emit importStateChanged();
+        if (assetGeneration != m_jobGeneration)
+            return;
         const int idx = m_project.findAssetIndex(assetId);
         if (idx < 0)
             return;
@@ -1361,6 +1371,10 @@ void Backend::exportSrtFile(const QString &pathOrUrl) {
 }
 
 void Backend::generateAutoCaptions(const QString &clipId, const QString &language) {
+    if (busy()) {
+        setStatus("Another background job is still running.");
+        return;
+    }
     int idx = m_project.findClipIndex(clipId);
     if (idx < 0 && !m_project.clips.isEmpty())
         idx = 0;
@@ -1370,6 +1384,9 @@ void Backend::generateAutoCaptions(const QString &clipId, const QString &languag
     }
     const TimelineClip clip = m_project.clips[idx];
     setStatus("Generating local auto captions...");
+    const int generation = m_jobGeneration;
+    ++m_busyJobs;
+    emit busyStateChanged();
     auto future = QtConcurrent::run([clip, language]() -> std::pair<QList<TextOverlay>, QString> {
         QString err;
         auto captions = MediaEngine::runAutoCaptions(clip.sourcePath, language, &err);
@@ -1379,9 +1396,13 @@ void Backend::generateAutoCaptions(const QString &clipId, const QString &languag
     });
 
     auto *watcher = new QFutureWatcher<std::pair<QList<TextOverlay>, QString>>(this);
-    connect(watcher, &QFutureWatcher<std::pair<QList<TextOverlay>, QString>>::finished, this, [this, watcher] {
+    connect(watcher, &QFutureWatcher<std::pair<QList<TextOverlay>, QString>>::finished, this, [this, watcher, generation] {
         const auto res = watcher->result();
         watcher->deleteLater();
+        --m_busyJobs;
+        emit busyStateChanged();
+        if (generation != m_jobGeneration)
+            return; // the project this job ran for is gone
         if (!res.second.isEmpty()) {
             fail(res.second);
             return;
@@ -1418,6 +1439,10 @@ void Backend::toggleVoiceoverRecording() {
 }
 
 void Backend::generateLocalTts(const QString &text) {
+    if (busy()) {
+        setStatus("Another background job is still running.");
+        return;
+    }
     if (text.trimmed().isEmpty()) {
         fail("Enter text for local TTS first.");
         return;
@@ -1426,15 +1451,22 @@ void Backend::generateLocalTts(const QString &text) {
     const QString outPath = MediaEngine::cacheDir() + QString("/tts_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
     const double startSec = m_playheadSec;
 
+    const int generation = m_jobGeneration;
+    ++m_busyJobs;
+    emit busyStateChanged();
     auto future = QtConcurrent::run([text, outPath]() -> QString {
         QString err;
         MediaEngine::runLocalTts(text, outPath, &err);
         return err;
     });
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, outPath, startSec] {
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, outPath, startSec, generation] {
         const QString err = watcher->result();
         watcher->deleteLater();
+        --m_busyJobs;
+        emit busyStateChanged();
+        if (generation != m_jobGeneration)
+            return; // the project this job ran for is gone
         if (!err.isEmpty()) {
             fail(err);
             return;
@@ -1450,6 +1482,10 @@ void Backend::generateLocalTts(const QString &text) {
 }
 
 void Backend::applyAiBackgroundRemoval(const QString &clipId) {
+    if (busy()) {
+        setStatus("Another background job is still running.");
+        return;
+    }
     const int idx = m_project.findClipIndex(clipId);
     if (idx < 0)
         return;
@@ -1457,15 +1493,22 @@ void Backend::applyAiBackgroundRemoval(const QString &clipId) {
     const QString outPath = MediaEngine::cacheDir() + QString("/nobg_%1.png").arg(clip.id);
     setStatus("Running local AI background removal...");
 
+    const int generation = m_jobGeneration;
+    ++m_busyJobs;
+    emit busyStateChanged();
     auto future = QtConcurrent::run([clip, outPath]() -> QString {
         QString err;
         MediaEngine::runAiBackgroundRemoval(clip.sourcePath, outPath, &err);
         return err;
     });
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, clipId, outPath] {
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, clipId, outPath, generation] {
         const QString err = watcher->result();
         watcher->deleteLater();
+        --m_busyJobs;
+        emit busyStateChanged();
+        if (generation != m_jobGeneration)
+            return; // the project this job ran for is gone
         if (!err.isEmpty()) {
             fail(err);
             return;

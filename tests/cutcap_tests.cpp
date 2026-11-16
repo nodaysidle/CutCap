@@ -112,6 +112,26 @@ static double contrastRatio(const QString &fg, const QString &bg) {
     return (std::max(a, b) + 0.05) / (std::min(a, b) + 0.05);
 }
 
+// Writes an executable shell shim and returns its path.
+static QString makeTool(const QString &dir, const QString &name, const QByteArray &body) {
+    QDir().mkpath(dir);
+    const QString path = dir + "/" + name;
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return {};
+    f.write(body);
+    f.close();
+    if (!QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner))
+        return {};
+    return path;
+}
+
+// Restores PATH when the test scope ends, even on an early QVERIFY return.
+struct PathRestore {
+    QByteArray value;
+    ~PathRestore() { qputenv("PATH", value); }
+};
+
 class CutCapTests : public QObject {
     Q_OBJECT
 
@@ -1729,26 +1749,13 @@ private slots:
         // A TTS engine that writes the requested output, and an ffprobe that fails, so the
         // synthesis succeeds and only the import of the result fails.
         const QString bin = dir.path() + "/faketools";
-        QVERIFY(QDir().mkpath(bin));
-        auto writeTool = [&bin](const QString &name, const QByteArray &body) -> bool {
-            QFile f(bin + "/" + name);
-            if (!f.open(QIODevice::WriteOnly))
-                return false;
-            f.write(body);
-            f.close();
-            return QFile::setPermissions(f.fileName(),
-                                         QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
-        };
-        QVERIFY(writeTool("piper", "#!/bin/sh\nout=\nwhile [ $# -gt 0 ]; do\n"
-                                  "  if [ \"$1\" = \"--output_file\" ]; then out=\"$2\"; fi\n"
-                                  "  shift\ndone\ncat >/dev/null\n: > \"$out\"\n"));
-        QVERIFY(writeTool("ffprobe", "#!/bin/sh\nexit 1\n"));
+        QVERIFY(!makeTool(bin, "piper", "#!/bin/sh\nout=\nwhile [ $# -gt 0 ]; do\n"
+                                        "  if [ \"$1\" = \"--output_file\" ]; then out=\"$2\"; fi\n"
+                                        "  shift\ndone\ncat >/dev/null\n: > \"$out\"\n").isEmpty());
+        QVERIFY(!makeTool(bin, "ffprobe", "#!/bin/sh\nexit 1\n").isEmpty());
 
         const QByteArray oldPath = qgetenv("PATH");
-        struct PathRestore {
-            QByteArray value;
-            ~PathRestore() { qputenv("PATH", value); }
-        } restore{oldPath};
+        PathRestore restore{oldPath};
         qputenv("PATH", bin.toUtf8() + ":" + oldPath);
 
         b.generateLocalTts("hello from the test");
@@ -1856,6 +1863,44 @@ private slots:
         QVERIFY2(!asset.value("thumbnailPath").toString().isEmpty(), "the thumbnail never arrived");
         QVERIFY2(!asset.value("filmstripPath").toString().isEmpty(), "the filmstrip never arrived");
         QCOMPARE(asset.value("waveformPeaks").toList().size(), 80);
+    }
+
+    // A job started for one project must not pour its result into the next one.
+    void testStaleCaptionResultDropped() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "speech.mp4", "purple", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 1);
+        const QString clipId = b.clipsList().first().toMap().value("id").toString();
+
+        // A whisper-cli that takes a second and then writes a caption, so the job is still running
+        // when the project is replaced.
+        const QString bin = dir.path() + "/faketools";
+        QVERIFY(!makeTool(bin, "whisper-cli", "#!/bin/sh\nout=\n"
+                                              "while [ $# -gt 0 ]; do\n"
+                                              "  if [ \"$1\" = \"-of\" ]; then out=\"$2\"; fi\n"
+                                              "  shift\n"
+                                              "done\n"
+                                              "sleep 1\n"
+                                              "printf '1\\n00:00:00,000 --> 00:00:01,000\\nStale caption\\n\\n' > \"$out.srt\"\n"
+                                              "").isEmpty());
+        const QByteArray oldPath = qgetenv("PATH");
+        PathRestore restore{oldPath};
+        qputenv("PATH", bin.toUtf8() + ":" + oldPath);
+
+        b.generateAutoCaptions(clipId, "en");
+        QVERIFY2(b.busy(), "the caption job must mark the app busy");
+        b.newProject();
+        QVERIFY(b.clipsList().isEmpty());
+        QCOMPARE(b.textsList().size(), 0);
+
+        QTRY_VERIFY_WITH_TIMEOUT(!b.busy(), 30000);
+        QCOMPARE(b.textsList().size(), 0);
+        QVERIFY2(!b.statusMessage().contains("auto captions", Qt::CaseInsensitive), qPrintable(b.statusMessage()));
     }
 };
 

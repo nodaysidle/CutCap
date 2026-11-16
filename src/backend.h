@@ -37,6 +37,7 @@ class Backend : public QObject {
     Q_PROPERTY(double snapGuideSec READ snapGuideSec NOTIFY snapGuideChanged)
     Q_PROPERTY(QVariantMap capabilities READ capabilities NOTIFY capabilitiesChanged)
     Q_PROPERTY(int importing READ importing NOTIFY importStateChanged)
+    Q_PROPERTY(bool busy READ busy NOTIFY busyStateChanged)
 
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY timelineChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY timelineChanged)
@@ -84,6 +85,7 @@ public:
     double snapGuideSec() const { return m_snapGuideSec; }
     QVariantMap capabilities() const;
     int importing() const { return m_importing; }
+    bool busy() const { return m_busyJobs > 0; }
 
     bool canUndo() const { return !m_undoStack.isEmpty(); }
     bool canRedo() const { return !m_redoStack.isEmpty(); }
@@ -189,6 +191,7 @@ signals:
     void errorOccurred(const QString &message);
     void capabilitiesChanged();
     void importStateChanged();
+    void busyStateChanged();
 
 private:
     enum class Lane { Base = 0, Overlay = 1, Audio = 2 };
@@ -235,6 +238,9 @@ private:
     int m_idCounter = 1;
     Capabilities m_caps;
     int m_importing = 0;
+    int m_busyJobs = 0;
+    // Bumped whenever the project is replaced, so a job started for the old one can drop its result.
+    int m_jobGeneration = 0;
 
     QTimer m_playbackTimer;
     QElapsedTimer m_playbackClock;

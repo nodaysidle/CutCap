@@ -669,7 +669,16 @@ Rectangle {
                         text: "Run Local AI Remove BG (rembg)"
                         Layout.fillWidth: true
                         fontPixelSize: Design.tBody
+                        enabled: !backend.busy
                         onClicked: backend.applyAiBackgroundRemoval(selClip.id)
+                    }
+                    Text {
+                        visible: backend.busy
+                        text: backend.statusMessage
+                        color: Design.textSecondary
+                        font.pixelSize: Design.tCaption
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
                     }
                     Text {
                         text: backend.capabilities.rembg
@@ -714,12 +723,20 @@ Rectangle {
                         ActionButton {
                             text: "Auto captions"
                             Layout.fillWidth: true
-                            enabled: backend.capabilities.whisper !== ""
+                            enabled: backend.capabilities.whisper !== "" && !backend.busy
                             toolTipText: backend.capabilities.whisper !== ""
                                          ? "Transcribe this clip offline with " + backend.capabilities.whisper
                                          : "Install whisper.cpp or faster-whisper for offline captions"
                             onClicked: backend.generateAutoCaptions(selClip.id, captionLang.text)
                         }
+                    }
+                    Text {
+                        visible: backend.busy
+                        text: backend.statusMessage
+                        color: Design.textSecondary
+                        font.pixelSize: Design.tCaption
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -761,7 +778,7 @@ Rectangle {
                         }
                         ActionButton {
                             text: "Speak"
-                            enabled: ttsField.text.length > 0
+                            enabled: ttsField.text.length > 0 && !backend.busy
                             toolTipText: "Generate a voice clip with the local TTS engine"
                             onClicked: backend.generateLocalTts(ttsField.text)
                         }
