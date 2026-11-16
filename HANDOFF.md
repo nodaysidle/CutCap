@@ -1,6 +1,10 @@
 # CutCap: Audit Handoff
 Date: 2026-11-16 · Author: Audit-Hawk · Scope: full code and UI/UX audit (read-only) · Previous handoff kept as `HANDOFF.2026-11-16.prev.md`
 
+**Status (end of 2026-11-16): all 29 findings are fixed, one commit per task, plus a design pass
+and a repo cleanup. The audit below is left as written; what changed is in the
+[Resolution log](#resolution-log--all-findings-fixed) at the end.**
+
 ## Summary
 - Stack: Qt 6.12 C++17 with QML (QtQuick Controls Material) and qmake6, driving local ffmpeg/ffprobe through QProcess. Arch/Omarchy/Hyprland desktop app. No git repo.
 - Health: works and is well tested (28 QtTest cases; clang-tidy and gcc show no real bugs), but it blocks the GUI thread on media I/O, never asks before discarding unsaved work, and loads project files without validating them.
@@ -90,3 +94,110 @@ Baseline on 2026-11-16: clang-tidy reports 11 perf/style notes and 0 bugprone/an
 - Leave `pkgbuild/pkg/`, `pkgbuild/*.pkg.tar.zst`, `.optim-jev/`, `after.png`, and `HANDOFF.2026-11-16.prev.md` alone.
 - No new runtime dependencies (whisper/piper/rembg stay optional). No network calls. The app is 100 % local.
 - Note: `AGENTS.md:5-6` asks agents to "fix defects silently". For this handoff, every task must still report the finding ID and its acceptance-check output.
+- **Superseded after the audit:** the owner later asked for a design pass (which edited the mark,
+  the top bar and `DESIGN.md`) and for the repo leftovers above to be deleted. Where those requests
+  conflict with this list, the Resolution log is authoritative.
+
+---
+
+## Resolution log — all findings fixed
+
+Fifteen commits on top of `fd33b93 baseline` (one per task, finding IDs in the message). Every new
+test was falsified before it was trusted: revert the fix, watch the named check fail, restore,
+watch it pass. No finding was skipped.
+
+| Finding | What changed | Commit |
+|---|---|---|
+| F01 | One `sanitizedChromaColor()` (`^#?[0-9A-Fa-f]{6}$`, default `#00ff00`) used on load, in `updateClipProperty` and when building the chromakey filter; the filter arg comes from `QColor(hex).name()`. | `8b8e1e2` |
+| F06 | `fromJson` clamps speed/track/volume/durations/opacity/blur/keyframe ranges to the UI values, and project and asset width/height (16–8192, even) and fps (1–240). | `8b8e1e2` |
+| F04 | TTS and voiceover act on the id `importAsset` returned, never `clips.last()`/`assets.last()`; a failed import leaves the timeline and the error status alone. `addAssetToTimeline` returns the new clip id. | `2a5b8a0` |
+| F05 | The ready-read handler keeps a rolling 2 KB stderr tail and the failure message picks the line that says what went wrong (`exportErrorReason`), falling back to the exit code. Cancel has its own branch: removes the partial output, reports "Export cancelled", emits `exportFinished(false, "cancelled")`; the dialog shows it neutrally. | `0fd2e13` |
+| F03 | `onClosing` vetoes, and Quit / Open / Import / `.cutcap` drops go through one Save-Discard-Cancel dialog. Ctrl+Q closes the window instead of `Qt.quit()` so the guard runs. | `32eca4d` |
+| F02 | Imports probe in a `QtConcurrent` job, add the asset and clip, then prepare previews in a second job that merges back (and refreshes the timeline model). `importMediaAt` chains files so packing still uses real durations. `openProject` starts preview jobs instead of waiting. New `importing` property, shown as a quiet badge. | `045e05c` |
+| F23 | `capabilities` is detected once at startup off-thread, cached, `NOTIFY`; `refreshCapabilities()` recomputes it; `estimateExport`/`startExport` use the cache instead of re-detecting. | `045e05c` |
+| F07 | `busy` counts captions/TTS/rembg jobs and refuses a second one; the inspector disables those buttons and shows the job's progress line. `newProject`/`openProject` bump a generation counter and every watcher (captions, TTS, rembg, import, preview) drops a result whose generation moved on. | `72411d7` |
+| F08 | The 1.5 s `hyprctl` poll is gone. Rounding is read at start and on `Theme::reload`, and Hyprland's socket2 `configreloaded` triggers a fresh read, with a 30 s socket reconnect after a compositor restart. | `4bdfa9e` |
+| F09 | `QVideoFrame::toImage()` runs inside the `QtConcurrent` worker; the colour-space flag is still read on the GUI thread and drop-if-busy is unchanged. | `b76bf0d` |
+| F10 | One `Canvas` draws only the visible viewport of the waveform and repaints on scroll/zoom/peaks; the smoke test finds it by size and checks rendered pixels, so a canvas that paints nothing fails. A 480 px clip at max zoom is 14 items (was ~330). | `b76bf0d` |
+| F11 | `ActionButton` exposes `Accessible.role/name/description/onPressAction`; the "?" button, title field, error banner, both text fields and the swatches have names. | `487aa3b` |
+| F12 | Chroma swatches are 24 px focusable items with a focus ring, Space/Return activation, a role, a name and a checked state. | `487aa3b` |
+| F25 | `tMicro`/`tCaption` are 12 px; the token test asserts the 12 px floor and no inversion instead of a strictly increasing low end, and `DESIGN.md` follows. | `487aa3b` |
+| F24 | The error toast has a Dismiss button and hovering pauses the timer. | `487aa3b` |
+| F13 | Clip name uses `textPrimary`, keyframe border uses `surfaceSunken`; both were hardcoded `#ffffff`/`#000000`. | `0d8f8e6` |
+| F14 | rembg needs the tool and an image clip; voiceover needs `pwRecord` (Stop stays enabled while recording); Speak needs the TTS engine. Each tooltip says what is missing. | `0d8f8e6` |
+| F16 | `rSm/rMd/rLg` are `NOTIFY changed`, so live rounding reaches QML. | `0d8f8e6` |
+| F17 | The Escape guard reads `.visible` on FileDialogs (`.opened` did not exist). | `03f0143` |
+| F18 | Dividers and the bin swatch use `Layout.preferredWidth/Height` instead of `width`/`height` under a layout. | `03f0143` |
+| F20 | The `MediaPlayer` id is `mediaPlayer`; the public `player` alias keeps its name. | `03f0143` |
+| F21 | `PropertyChanges { assetCard.z: …; assetCard.opacity: … }`. | `03f0143` |
+| F22 | The clip map carries `filmstripTileWidth/Height` from the C++ constants; the strip crops with them and the smoke test fails if the map entry disappears. | `03f0143` |
+| F19 | `Backend`, `Theme`, `Design` and `ClipFrameItem` are `QML_ELEMENT` types (the first three singletons), qmake generates `cutcap.qmltypes`, and a root `qmldir` points qmllint at it. The app and the tests register their instances after the module's types (an instance registration seals the module version). QML reads `Backend.`/`Theme.`. `[unqualified]` went 793 → 4. | `3bfd411` |
+| F15 | `PKGBUILD` has `makedepends` and a `build()` that runs `qmake6` + `make` in `$srcdir/build` and packages that binary. | `a533c5f` |
+| F29 | `bin/build` honours `BUILD_DIR`; the stale `chromakeyitem`/`moc_chromakeyitem` objects are gone; `build/` is ignored and untracked. | `a533c5f` |
+| F26 | The `parec` fallback passes `--file-format=wav`. | `6464253` |
+| F27 | ASS text escapes the backslash before `\N` and the braces. | `6464253` |
+| F28 | `pruneCache()` drops cache files older than a week (keeping explicit paths) once at startup on the worker pool. | `6464253` |
+
+### Defects found while fixing
+
+- **Four dead buttons.** Resolving the QML module made the type checker see cross-file ids that do
+  not exist: the media bin's and the preview's Import buttons and the inspector's `.srt` import and
+  export pointed at ids from `Main.qml`. They emit signals that `Main.qml` connects to its dialogs
+  (`3bfd411`). The media-bin drag reparenting was switched from `Window.window.contentItem` (not an
+  Item, a `ParentChange` error) to `Overlay.overlay` (`687d520`).
+- **The F05 test first passed for the wrong reason**: ffmpeg's input dump is longer than 20 chars.
+  The message now extracts the error line and the test requires "No such file" and rejects the bare
+  exit-code fallback.
+- **The F02 import chain leaked**: the continuation captured its own `shared_ptr`. It is a
+  `Backend::ImportChain` owned by the pending completion now.
+
+### Behaviour changes a future agent must know
+
+- **Imports are asynchronous.** Callers (and tests) must wait for `importing == 0` before reading
+  assets or clips; multi-file drops are chained, and preview completion emits `timelineChanged()`.
+- **TTS/voiceover imports are asynchronous too**; the clip appears when the probe returns.
+- **`capabilities` is empty for the first moments after startup** (detected off-thread), so QML
+  gates on it and turns buttons on when it arrives.
+- **The QML module is `CutCap`**, with a root `qmldir` + committed `cutcap.qmltypes`; `bin/build`
+  refreshes the qmltypes. QML refers to `Backend.`/`Theme.`/`Design.`.
+- **`tMicro` and `tCaption` are 12 px** now, not 10/11; the low end of the type scale is flat.
+
+### Design pass (after the audit)
+
+Not an audit finding, requested separately: the accent tile with a "C" in the top bar (it broke the
+documented accent budget and carried a 170 px gap) is replaced by two offset clip bars in ink,
+drawn in QML, and `pkgbuild/cutcap.svg` is the same mark on a graphite tile so the in-app, desktop
+and menu icons agree. The title is a bare `TextInput` — the Material `TextField` was clipping the
+glyph tops and adding an inset — and it follows the name's width so the "unsaved" badge sits next
+to it. Flat actions lost their borders. The viewer's empty state sits on the themed bed (theme ink
+on black was invisible in a light theme). The inspector's track button reads "Move to V2/V1".
+`DESIGN.md` records the mark, the empty-state bed and borderless flat buttons.
+
+### Verification (final)
+
+```
+./bin/build              → Built …/build/cutcap (730,480 bytes)
+./bin/test               → Totals: 41 passed, 0 failed, 0 skipped, 0 blacklisted
+out-of-tree build        → qmake6 + make in a clean dir; the binary loads and runs
+qmllint                  → 0 errors; [unqualified] 4 (was 793); the four targeted
+                           categories 0; 95 int→real bindings and 20 JS .length/map-key
+                           false positives remain, all non-actionable
+clang-tidy (*.cpp)       → 0 errors, 0 bugprone/analyzer, 15 performance notes
+./build/cutcap --help    → works
+```
+The clang-tidy command in the section above needs `-I$Q/QtNetwork` now that `theme.h` includes
+`QLocalSocket`; without it clang-tidy reports a false "file not found".
+
+### Left open on purpose
+
+- **No LICENSE file exists**, so the package still installs none despite `license=('MIT')`. The
+  owner has to add it; the `PKGBUILD` will pick it up.
+- `HANDOFF.2026-11-16.prev.md`, `HANDOFF.md` and `DESIGN.md` stay; `build/`, `pkgbuild/pkg/`,
+  `pkgbuild/*.pkg.tar.zst`, `after.png` and `.optim-jev/` were removed and are ignored.
+
+### Repo state
+
+17 commits (baseline + 16), 41 tracked files. `build/` is generated and ignored; `bin/build` takes
+`BUILD_DIR`. The installed copy on this machine is `~/.local/bin/cutcap` with
+`~/.local/share/applications/cutcap.desktop` and the hicolor icon, and the app is in
+`omarchy-menu` under Apps as `apps.cutcap`.
