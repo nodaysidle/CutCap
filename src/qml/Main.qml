@@ -439,21 +439,26 @@ ApplicationWindow {
                 anchors.rightMargin: Design.s4
                 spacing: Design.s2
 
-                Rectangle {
-                    width: 18
-                    height: 18
-                    radius: Design.rXs
-                    color: Design.accent
-                    Text {
-                        anchors.centerIn: parent
-                        text: "C"
-                        color: Design.onAccent
-                        font.pixelSize: Design.tCaption
-                        font.weight: Design.wSemibold
-                    }
+                // The mark: two offset clips, the cut between them. Drawn rather than an asset so
+                // it stays crisp, and in ink rather than the accent, which is reserved for actions.
+                Item {
+                    objectName: "brandMark"
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    Rectangle { x: 0; y: 2; width: 11; height: 5; color: Design.textPrimary }
+                    Rectangle { x: 5; y: 9; width: 11; height: 5; color: Design.textPrimary }
                 }
 
-                TextField {
+                TextMetrics {
+                    id: titleMetrics
+                    font: titleField.font
+                    text: titleField.text.length > 0 ? titleField.text : Backend.projectTitle
+                }
+
+                // A bare TextInput, not a Material TextField: the bar owns the look, and the style's
+                // insets clipped the glyph tops and pushed the name away from the mark.
+                TextInput {
                     id: titleField
                     objectName: "titleField"
                     Accessible.name: "Project title"
@@ -461,24 +466,25 @@ ApplicationWindow {
                     color: Design.textPrimary
                     font.pixelSize: Design.tBodyLg
                     font.weight: Design.wMedium
+                    selectByMouse: true
                     Layout.minimumWidth: 120
-                    Layout.preferredWidth: 170
+                    // Follow the name so the unsaved badge sits next to it instead of drifting.
+                    Layout.preferredWidth: Math.min(220, Math.max(120, titleMetrics.width + 10))
                     Layout.maximumWidth: 220
-                    Layout.fillWidth: false
-                    padding: 0
-                    topInset: 0
-                    bottomInset: 0
+                    Layout.preferredHeight: Design.hSmall
+                    leftPadding: 0
+                    rightPadding: 0
+                    topPadding: 0
+                    bottomPadding: 0
                     verticalAlignment: TextInput.AlignVCenter
-                    background: Rectangle {
-                        color: "transparent"
-                        Rectangle {
-                            anchors.bottom: parent.bottom
-                            width: parent.width
-                            height: 1
-                            color: titleField.activeFocus ? Design.accent : "transparent"
-                        }
-                    }
                     onEditingFinished: Backend.setProjectTitle(text)
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: 1
+                        color: titleField.activeFocus ? Design.accent : "transparent"
+                    }
                 }
 
                 Text {

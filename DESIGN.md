@@ -127,7 +127,13 @@ not hand-write `rgba(...)` literals.
   headings are not used.
 - **Selected state = 2 px `textPrimary` outline; hover = surface tint.** Selection is never
   colour-only.
-- **Empty states say what to do**: the viewer offers "Import Media" instead of "no clip".
+- **Empty states say what to do**: the viewer offers "Import Media" instead of "no clip", on the
+  themed `surfaceSunken` bed so the prompt uses theme ink. Only real playback is black.
+- **The mark is two offset bars in `textPrimary`** — drawn in QML, never a letter in a filled
+  tile and never in the accent, which is reserved for Play, the primary action, focus and the
+  playhead. `pkgbuild/cutcap.svg` carries the same two bars for the desktop icon.
+- **Flat buttons carry no border.** Hover tints the surface, focus adds the 2 px ring; a border is
+  for buttons that own a surface, not for the command strip.
 
 ---
 

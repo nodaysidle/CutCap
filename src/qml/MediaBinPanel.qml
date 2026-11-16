@@ -108,7 +108,7 @@ Rectangle {
 
                 states: State {
                     when: assetDragArea.drag.active
-                    ParentChange { target: assetCard; parent: Window.window.contentItem }
+                    ParentChange { target: assetCard; parent: Overlay.overlay }
                     PropertyChanges { assetCard.z: 500; assetCard.opacity: 0.85 }
                 }
 

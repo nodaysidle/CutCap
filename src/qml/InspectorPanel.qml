@@ -408,7 +408,8 @@ Rectangle {
                         Text { text: "Track"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
                         Item { Layout.fillWidth: true }
                         ActionButton {
-                            text: root.selClip.track === 0 ? "V1 Main → V2" : "V2 Overlay → V1"
+                            text: root.selClip.track === 0 ? "Move to V2" : "Move to V1"
+                            toolTipText: "Move this clip to the other video track"
                             onClicked: Backend.moveClip(root.selClip.id, root.selClip.timelineStartSec, root.selClip.track === 0 ? 1 : 0)
                         }
                     }

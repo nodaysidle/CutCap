@@ -54,7 +54,10 @@ Rectangle {
                 anchors.centerIn: parent
                 width: Math.min(parent.width, parent.height * root.aspectRatio)
                 height: width / root.aspectRatio
-                color: "#000000"
+                // An empty project has no picture, so it shows the themed bed and a prompt in theme
+                // ink; black would make the prompt unreadable in a light theme. Playback is black.
+                readonly property bool emptyProject: Backend.clipsList.length === 0 && Backend.textsList.length === 0
+                color: emptyProject ? Design.surfaceSunken : "#000000"
                 clip: true
                 border.color: Design.borderHairline
                 border.width: 1
@@ -82,7 +85,7 @@ Rectangle {
                 Column {
                     anchors.centerIn: parent
                     spacing: 10
-                    visible: Backend.clipsList.length === 0
+                    visible: parent.emptyProject
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Drop video, audio or images here"

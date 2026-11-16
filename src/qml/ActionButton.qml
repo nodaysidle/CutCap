@@ -35,7 +35,8 @@ Rectangle {
     radius: Design.rMd
     opacity: enabled ? 1.0 : 0.45
     activeFocusOnTab: enabled
-    border.width: activeFocus ? 2 : (highlighted ? 0 : 1)
+    // Flat actions carry no box: the command strip stays a row of labels, not a tray of buttons.
+    border.width: activeFocus ? 2 : (highlighted || flat ? 0 : 1)
     border.color: activeFocus ? Design.focusRing : Design.borderHairline
     color: {
         if (mouse.pressed)
