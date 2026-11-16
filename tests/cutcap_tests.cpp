@@ -183,7 +183,10 @@ private slots:
         Theme theme(dir.path());
         Design d(theme);
         QVERIFY(d.s1() < d.s2() && d.s2() < d.s3() && d.s3() < d.s4() && d.s4() < d.s5() && d.s5() < d.s6());
-        QVERIFY(d.tMicro() < d.tCaption() && d.tCaption() < d.tBody() && d.tBody() <= d.tBodyLg() && d.tBodyLg() < d.tTitle());
+        // Type floor: nothing under 12 px (labels are read, not just glanced at), and no tier inverts.
+        QVERIFY(d.tMicro() >= 12 && d.tCaption() >= 12);
+        QVERIFY(d.tMicro() <= d.tCaption() && d.tCaption() <= d.tBody() && d.tBody() <= d.tBodyLg() &&
+                d.tBodyLg() < d.tTitle());
         QVERIFY(d.hCompact() < d.hSmall() && d.hSmall() < d.hStd() && d.hStd() < d.hLarge());
         QVERIFY(d.rXs() < d.rSm() && d.rSm() < d.rMd() && d.rMd() < d.rLg());
         QVERIFY(d.hCompact() >= d.tBodyLg() + 8);   // a 24px control can hold 13px text with padding

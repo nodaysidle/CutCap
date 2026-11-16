@@ -23,8 +23,8 @@ class Design : public QObject {
     Q_PROPERTY(int s8 READ s8 CONSTANT)   // 32
 
     // Type scale for dense desktop UI: 11-13px body, no display sizes inside panels.
-    Q_PROPERTY(int tMicro READ tMicro CONSTANT)      // 10 - kbd, ruler, badges
-    Q_PROPERTY(int tCaption READ tCaption CONSTANT)  // 11 - labels, metadata
+    Q_PROPERTY(int tMicro READ tMicro CONSTANT)      // 12 - kbd, ruler, badges
+    Q_PROPERTY(int tCaption READ tCaption CONSTANT)  // 12 - labels, metadata
     Q_PROPERTY(int tBody READ tBody CONSTANT)        // 12 - default text
     Q_PROPERTY(int tBodyLg READ tBodyLg CONSTANT)    // 13 - values, clip names
     Q_PROPERTY(int tTitle READ tTitle CONSTANT)      // 15 - panel title
@@ -96,8 +96,8 @@ public:
     int s7() const { return 24; }
     int s8() const { return 32; }
 
-    int tMicro() const { return 10; }
-    int tCaption() const { return 11; }
+    int tMicro() const { return 12; }
+    int tCaption() const { return 12; }
     int tBody() const { return 12; }
     int tBodyLg() const { return 13; }
     int tTitle() const { return 15; }

@@ -23,6 +23,11 @@ Rectangle {
 
     signal clicked()
 
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    Accessible.description: toolTipText
+    Accessible.onPressAction: clicked()
+
     implicitWidth: label.implicitWidth + 2 * horizontalPadding
     implicitHeight: Math.max(Design.hCompact, label.implicitHeight + 2 * verticalPadding)
     radius: Design.rMd

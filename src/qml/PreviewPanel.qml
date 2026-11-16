@@ -167,7 +167,8 @@ Rectangle {
                 }
                 Text {
                     objectName: "transportDuration"
-                    visible: transportRow.width >= 350
+                    // Secondary metadata: shown only when the row can hold it next to every control.
+                    visible: transportRow.width >= 400
                     text: "/ " + backend.formatTimecode(backend.totalDuration)
                     color: Design.textSecondary
                     font.family: "monospace"

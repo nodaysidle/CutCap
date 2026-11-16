@@ -59,8 +59,8 @@ live Omarchy theme so a theme switch restyles the app with no QML change.
 
 | Token | px | Weight | Use |
 |---|---|---|---|
-| `tMicro` | 10 | 500 | ruler, kbd badges |
-| `tCaption` | 11 | 500 | section labels, metadata, buttons |
+| `tMicro` | 12 | 500 | ruler, kbd badges |
+| `tCaption` | 12 | 500 | section labels, metadata, buttons |
 | `tBody` | 12 | 400 | default text, list rows |
 | `tBodyLg` | 13 | 400/600 | values, clip names, panel title |
 | `tTitle` | 15 | 600 | dialog title |

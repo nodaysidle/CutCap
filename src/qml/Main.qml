@@ -352,7 +352,8 @@ ApplicationWindow {
         }
     }
 
-    // Error toast
+    // Error toast: stays until dismissed or 6 s pass without the pointer over it, so a long ffmpeg
+    // message can be read and copied.
     Rectangle {
         id: errorBanner
         visible: false
@@ -367,13 +368,38 @@ ApplicationWindow {
         border.color: Design.danger
         border.width: 1
 
+        Accessible.role: Accessible.AlertMessage
+        Accessible.name: errText.text
+
         Text {
             id: errText
             anchors.fill: parent
             anchors.margins: 10
+            anchors.rightMargin: 86
             color: Design.textPrimary
             font.pixelSize: Design.tBodyLg
             wrapMode: Text.WordWrap
+        }
+
+        ActionButton {
+            objectName: "errorDismissButton"
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Dismiss"
+            fontPixelSize: Design.tCaption
+            horizontalPadding: Design.s3
+            verticalPadding: Design.s2
+            onClicked: errorBanner.visible = false
+        }
+
+        HoverHandler {
+            onHoveredChanged: {
+                if (hovered)
+                    errTimer.stop()
+                else if (errorBanner.visible)
+                    errTimer.restart()
+            }
         }
 
         Timer {
@@ -428,6 +454,7 @@ ApplicationWindow {
                 TextField {
                     id: titleField
                     objectName: "titleField"
+                    Accessible.name: "Project title"
                     text: backend.projectTitle
                     color: Design.textPrimary
                     font.pixelSize: Design.tBodyLg
@@ -520,6 +547,7 @@ ApplicationWindow {
                     flat: true
                     horizontalPadding: Design.s3
                     toolTipText: "Shortcuts (?)"
+                    Accessible.name: "Keyboard shortcuts"
                     onClicked: shortcutsDialog.open()
                 }
                 ActionButton {

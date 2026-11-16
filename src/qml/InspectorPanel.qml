@@ -650,17 +650,47 @@ Rectangle {
                         spacing: Design.s3
                         Text { text: "Key Color:"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
                         Repeater {
-                            model: ["#00ff00", "#0000ff", "#14161a", "#eceff4"]
-                            delegate: Rectangle {
-                                width: 22; height: 22; radius: Design.rSm
-                                color: modelData
-                                border.color: (hasClip && selClip.chromaColor === modelData) ? Design.accent : Design.borderHairline
-                                border.width: 2
+                            model: [
+                                { value: "#00ff00", name: "Green" },
+                                { value: "#0000ff", name: "Blue" },
+                                { value: "#14161a", name: "Graphite" },
+                                { value: "#eceff4", name: "White" }
+                            ]
+                            delegate: Item {
+                                id: swatch
+                                width: 24
+                                height: 24
+                                activeFocusOnTab: true
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: modelData.name + " key colour"
+                                Accessible.checked: hasClip && selClip.chromaColor === modelData.value
+                                Accessible.onPressAction: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 20
+                                    height: 20
+                                    radius: Design.rXs
+                                    color: modelData.value
+                                    border.color: (hasClip && selClip.chromaColor === modelData.value) ? Design.accent : Design.borderHairline
+                                    border.width: 2
+                                }
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: Design.rSm
+                                    color: "transparent"
+                                    border.width: swatch.activeFocus ? 2 : 0
+                                    border.color: Design.focusRing
+                                }
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.updateClipProperty(selClip.id, "chromaColor", modelData)
+                                    onClicked: {
+                                        swatch.forceActiveFocus()
+                                        backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                    }
                                 }
+                                Keys.onSpacePressed: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                Keys.onReturnPressed: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
                             }
                         }
                     }
@@ -701,6 +731,7 @@ Rectangle {
                         spacing: Design.s1
                         TextField {
                             id: captionLang
+                            Accessible.name: "Caption language"
                             text: "en"
                             Layout.preferredWidth: 52
                             implicitHeight: Design.hSmall
@@ -757,6 +788,7 @@ Rectangle {
                         spacing: Design.s1
                         TextField {
                             id: ttsField
+                            Accessible.name: "Text to speak"
                             placeholderText: "Text to speak locally"
                             Layout.fillWidth: true
                             implicitHeight: Design.hSmall
