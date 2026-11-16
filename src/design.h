@@ -45,9 +45,9 @@ class Design : public QObject {
 
     // Radii: sharp by design. Panels are square; only chips/controls round.
     Q_PROPERTY(int rXs READ rXs CONSTANT)
-    Q_PROPERTY(int rSm READ rSm CONSTANT)
-    Q_PROPERTY(int rMd READ rMd CONSTANT)
-    Q_PROPERTY(int rLg READ rLg CONSTANT)
+    Q_PROPERTY(int rSm READ rSm NOTIFY changed)
+    Q_PROPERTY(int rMd READ rMd NOTIFY changed)
+    Q_PROPERTY(int rLg READ rLg NOTIFY changed)
 
     // Motion: crisp hover/press only, no loops, no bounce.
     Q_PROPERTY(int msFast READ msFast CONSTANT)   // 90

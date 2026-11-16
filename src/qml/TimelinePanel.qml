@@ -850,7 +850,7 @@ Rectangle {
                     anchors.rightMargin: 5
                     verticalAlignment: Text.AlignVCenter
                     text: clipData.name
-                    color: "#ffffff"
+                    color: Design.textPrimary
                     font.pixelSize: Design.tCaption
                     font.weight: Design.wSemibold
                     elide: Text.ElideRight
@@ -867,7 +867,7 @@ Rectangle {
                     height: 8
                     rotation: 45
                     color: Design.warning
-                    border.color: "#000000"
+                    border.color: Design.surfaceSunken
                     border.width: 1
                 }
             }

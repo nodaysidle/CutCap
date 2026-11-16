@@ -699,7 +699,12 @@ Rectangle {
                         text: "Run Local AI Remove BG (rembg)"
                         Layout.fillWidth: true
                         fontPixelSize: Design.tBody
-                        enabled: !backend.busy
+                        enabled: backend.capabilities.rembg !== "" && selClip.kind === "image" && !backend.busy
+                        toolTipText: backend.capabilities.rembg === ""
+                                     ? "Install rembg (uv tool install rembg[cli]) for local AI cutout; Chroma Key works without it"
+                                     : (selClip.kind !== "image"
+                                        ? "AI cutout works on image clips; Chroma Key removes a colour from video"
+                                        : "Remove this image's background locally")
                         onClicked: backend.applyAiBackgroundRemoval(selClip.id)
                     }
                     Text {
@@ -781,6 +786,10 @@ Rectangle {
                         Layout.fillWidth: true
                         fillColor: backend.recordingVoiceover ? Design.danger : Design.surfaceRaised
                         textColor: backend.recordingVoiceover ? Design.onAccent : Design.textPrimary
+                        enabled: backend.recordingVoiceover || backend.capabilities.pwRecord
+                        toolTipText: backend.recordingVoiceover || backend.capabilities.pwRecord
+                                     ? "Record a voiceover onto the audio lane"
+                                     : "Install pipewire (pw-record) or pulseaudio-utils (parec) to record"
                         onClicked: backend.toggleVoiceoverRecording()
                     }
                     RowLayout {
@@ -810,8 +819,10 @@ Rectangle {
                         }
                         ActionButton {
                             text: "Speak"
-                            enabled: ttsField.text.length > 0 && !backend.busy
-                            toolTipText: "Generate a voice clip with the local TTS engine"
+                            enabled: ttsField.text.length > 0 && backend.capabilities.tts !== "" && !backend.busy
+                            toolTipText: backend.capabilities.tts === ""
+                                         ? "Install piper-tts or espeak-ng for offline speech"
+                                         : "Generate a voice clip with the local TTS engine"
                             onClicked: backend.generateLocalTts(ttsField.text)
                         }
                     }
