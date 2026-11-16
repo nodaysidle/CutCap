@@ -117,7 +117,8 @@ public:
     Q_INVOKABLE void clearSnapGuide();
     Q_INVOKABLE void applyLookPreset(const QString &clipId, const QString &preset);
     Q_INVOKABLE void removeAsset(const QString &assetId);
-    Q_INVOKABLE void addAssetToTimeline(const QString &assetId, int track = 0, double atSec = -1.0);
+    // Appends a clip for the asset; returns the new clip id, empty when the asset is unknown.
+    Q_INVOKABLE QString addAssetToTimeline(const QString &assetId, int track = 0, double atSec = -1.0);
 
     Q_INVOKABLE void selectClip(const QString &clipId);
     Q_INVOKABLE void selectClipAdditive(const QString &clipId);

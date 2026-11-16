@@ -1620,6 +1620,56 @@ private slots:
         b.undo();
         QCOMPARE(b.clipsList().size(), 2);
     }
+
+    // A failing import must not move the user's last clip onto the audio lane, and must not
+    // replace the import error with a success status.
+    void testTtsImportFailureLeavesTimeline() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "existing.mp4", "red", 1.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        b.importMediaAt({vid}, 0, 0.0);
+        QCOMPARE(b.clipsList().size(), 1);
+        const QString clipId = b.clipsList().first().toMap().value("id").toString();
+        QCOMPARE(b.clipsList().first().toMap().value("track").toInt(), 0);
+
+        // A TTS engine that writes the requested output, and an ffprobe that fails, so the
+        // synthesis succeeds and only the import of the result fails.
+        const QString bin = dir.path() + "/faketools";
+        QVERIFY(QDir().mkpath(bin));
+        auto writeTool = [&bin](const QString &name, const QByteArray &body) -> bool {
+            QFile f(bin + "/" + name);
+            if (!f.open(QIODevice::WriteOnly))
+                return false;
+            f.write(body);
+            f.close();
+            return QFile::setPermissions(f.fileName(),
+                                         QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+        };
+        QVERIFY(writeTool("piper", "#!/bin/sh\nout=\nwhile [ $# -gt 0 ]; do\n"
+                                  "  if [ \"$1\" = \"--output_file\" ]; then out=\"$2\"; fi\n"
+                                  "  shift\ndone\ncat >/dev/null\n: > \"$out\"\n"));
+        QVERIFY(writeTool("ffprobe", "#!/bin/sh\nexit 1\n"));
+
+        const QByteArray oldPath = qgetenv("PATH");
+        struct PathRestore {
+            QByteArray value;
+            ~PathRestore() { qputenv("PATH", value); }
+        } restore{oldPath};
+        qputenv("PATH", bin.toUtf8() + ":" + oldPath);
+
+        b.generateLocalTts("hello from the test");
+        QTRY_VERIFY_WITH_TIMEOUT(b.statusMessage() != "Synthesizing local TTS...", 20000);
+
+        QCOMPARE(b.clipsList().size(), 1);
+        const QVariantMap clip = b.clipsList().first().toMap();
+        QCOMPARE(clip.value("id").toString(), clipId);
+        QCOMPARE(clip.value("track").toInt(), 0);
+        QCOMPARE(clip.value("timelineStartSec").toDouble(), 0.0);
+        QVERIFY2(b.statusMessage().contains("ffprobe"), qPrintable(b.statusMessage()));
+    }
 };
 
 // Video textures, MultiEffect and shapes need an RHI scene graph; the offscreen platform otherwise

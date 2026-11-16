@@ -71,17 +71,17 @@ Backend::Backend(QObject *parent) : QObject(parent) {
 
     connect(&m_voiceoverProcess, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
         emit voiceoverStateChanged();
-        if (QFileInfo::exists(m_voiceoverPath) && QFileInfo(m_voiceoverPath).size() > 1024) {
-            const QString path = m_voiceoverPath;
-            const double startSec = m_voiceoverStartSec;
-            importSingleMedia(path);
-            if (!m_project.assets.isEmpty()) {
-                addAssetToTimeline(m_project.assets.last().id, 2, startSec);
-                setStatus("Voiceover recorded & added to Audio track");
-            }
-        } else {
+        if (!QFileInfo::exists(m_voiceoverPath) || QFileInfo(m_voiceoverPath).size() <= 1024) {
             setStatus("Voiceover recording cancelled or empty");
+            return;
         }
+        const QString path = m_voiceoverPath;
+        const double startSec = m_voiceoverStartSec;
+        const QString assetId = importAsset(path);
+        if (assetId.isEmpty())
+            return; // importAsset already reported the reason; leave the timeline untouched
+        addAssetToTimeline(assetId, 2, startSec);
+        setStatus("Voiceover recorded & added to Audio track");
     });
 }
 
@@ -651,10 +651,10 @@ double Backend::snapTime(double sec, int track, const QString &ignoreClipId) con
     return snapped;
 }
 
-void Backend::addAssetToTimeline(const QString &assetId, int track, double atSec) {
+QString Backend::addAssetToTimeline(const QString &assetId, int track, double atSec) {
     const int idx = m_project.findAssetIndex(assetId);
     if (idx < 0)
-        return;
+        return {};
     const MediaAsset &asset = m_project.assets[idx];
 
     pushUndo();
@@ -678,6 +678,7 @@ void Backend::addAssetToTimeline(const QString &assetId, int track, double atSec
     emit timelineChanged();
     emit selectionChanged();
     emit previewChanged();
+    return clip.id;
 }
 
 void Backend::setLaneState(int track, const QString &key, bool value) {
@@ -1322,13 +1323,10 @@ void Backend::generateLocalTts(const QString &text) {
             fail(err);
             return;
         }
-        importSingleMedia(outPath);
-        if (!m_project.assets.isEmpty()) {
-            // Move newly added clip to playhead on audio track
-            const QString lastClipId = m_project.clips.isEmpty() ? QString() : m_project.clips.last().id;
-            if (!lastClipId.isEmpty())
-                moveClip(lastClipId, startSec, 2);
-        }
+        const QString assetId = importAsset(outPath);
+        if (assetId.isEmpty())
+            return; // importAsset already reported the reason; no clip is moved and no success status is set
+        addAssetToTimeline(assetId, 2, startSec);
         setStatus("Generated local TTS voiceover");
     });
     watcher->setFuture(future);
