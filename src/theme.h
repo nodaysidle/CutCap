@@ -5,9 +5,12 @@
 #include <QObject>
 #include <QProcess>
 #include <QTimer>
+#include <QtQml/qqmlregistration.h>
 
 class Theme : public QObject {
     Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
     Q_PROPERTY(QString accent READ accent NOTIFY changed)
     Q_PROPERTY(QString accentForeground READ accentForeground NOTIFY changed)
     Q_PROPERTY(QString background READ background NOTIFY changed)

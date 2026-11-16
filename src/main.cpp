@@ -33,12 +33,18 @@ int main(int argc, char *argv[]) {
     app.setWindowIcon(QIcon::fromTheme("cutcap"));
 
     QQuickStyle::setStyle("Material");
-    ClipFrameItem::registerQmlType();
+
+    // Register the module's own types before injecting our instances: registering a singleton
+    // instance seals the module version, and a later module registration would then be dropped.
+    extern void qml_register_types_CutCap();
+    qml_register_types_CutCap();
 
     Theme theme;
     Design design(theme);
     qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+    qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
     Backend backend;
+    qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
 
     // Support `cutcap open <file>...` or `cutcap <file>...`. A desktop launcher expands `%F` to
     // nothing, so `cutcap open` on its own must open an empty project, not import a file "open".
@@ -46,8 +52,6 @@ int main(int argc, char *argv[]) {
         backend.importSingleMedia(file);
 
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty("theme", &theme);
-    engine.rootContext()->setContextProperty("backend", &backend);
     engine.load(QUrl("qrc:/qml/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

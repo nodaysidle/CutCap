@@ -187,10 +187,6 @@ ClipFrameItem::~ClipFrameItem() {
     m_watcher.waitForFinished();
 }
 
-void ClipFrameItem::registerQmlType() {
-    qmlRegisterType<ClipFrameItem>("CutCap", 1, 0, "ClipFrameItem");
-}
-
 void ClipFrameItem::setImageSource(const QString &source) {
     if (source == m_imageSource)
         return;

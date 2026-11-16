@@ -9,10 +9,13 @@
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QtQml/qqmlregistration.h>
 #include <functional>
 
 class Backend : public QObject {
     Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
     Q_PROPERTY(QString projectTitle READ projectTitle NOTIFY projectChanged)
     Q_PROPERTY(QString projectPath READ projectPath NOTIFY projectChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY projectChanged)

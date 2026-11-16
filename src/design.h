@@ -3,14 +3,20 @@
 #include <QColor>
 #include <QObject>
 #include <QString>
+#include <QtQml/qqmlregistration.h>
 
 #include "theme.h"
+
+class QQmlEngine;
+class QJSEngine;
 
 // CutCap design tokens. One source for spacing, type, radii, control heights, motion and the
 // semantic colour roles, so QML never invents a 7px margin or a 13px caption. Colour roles are
 // derived from the live Omarchy theme, so a theme switch restyles the app without touching QML.
 class Design : public QObject {
     Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
 
     // Grid: 2px hairline step, 4px base, 8px rhythm, 24/32 for panel padding.
     Q_PROPERTY(int s1 READ s1 CONSTANT)   // 2
@@ -86,6 +92,8 @@ class Design : public QObject {
 
 public:
     explicit Design(Theme &theme, QObject *parent = nullptr);
+    // Fallback for a QML-only load: main registers its own instance (which takes precedence).
+    static Design *create(QQmlEngine *engine, QJSEngine *scriptEngine);
 
     int s1() const { return 2; }
     int s2() const { return 4; }

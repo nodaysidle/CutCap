@@ -812,16 +812,16 @@ private slots:
         QVERIFY(!baseVid.isEmpty() && !pipVid.isEmpty());
 
         QQuickStyle::setStyle("Material");
-        ClipFrameItem::registerQmlType();
         Theme theme(dir.path());
-        static std::unique_ptr<Design> design;
-        static bool designRegistered = false;
-        design = std::make_unique<Design>(theme);
-        if (!designRegistered) {
-            qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", design.get());
-            designRegistered = true;
-        }
+        Design design(theme);
         Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
         backend.importSingleMedia(baseVid);
         waitForImports(backend);
         backend.importSingleMedia(pipVid);
@@ -836,8 +836,6 @@ private slots:
         g_qmlErrors = &qmlErrors;
         g_previousHandler = qInstallMessageHandler(captureQmlErrors);
         QQmlApplicationEngine engine;
-        engine.rootContext()->setContextProperty("theme", &theme);
-        engine.rootContext()->setContextProperty("backend", &backend);
         engine.load(QUrl("qrc:/qml/Main.qml"));
         qInstallMessageHandler(g_previousHandler);
         g_qmlErrors = nullptr;
@@ -1809,22 +1807,20 @@ private slots:
         QVERIFY(!vid.isEmpty());
 
         QQuickStyle::setStyle("Material");
-        ClipFrameItem::registerQmlType();
         Theme theme(dir.path());
-        static std::unique_ptr<Design> design;
-        static bool designRegistered = false;
-        design = std::make_unique<Design>(theme);
-        if (!designRegistered) {
-            qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", design.get());
-            designRegistered = true;
-        }
+        Design design(theme);
         Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
         QStringList qmlErrors;
         g_qmlErrors = &qmlErrors;
         g_previousHandler = qInstallMessageHandler(captureQmlErrors);
         QQmlApplicationEngine engine;
-        engine.rootContext()->setContextProperty("theme", &theme);
-        engine.rootContext()->setContextProperty("backend", &backend);
         engine.load(QUrl("qrc:/qml/Main.qml"));
         qInstallMessageHandler(g_previousHandler);
         g_qmlErrors = nullptr;

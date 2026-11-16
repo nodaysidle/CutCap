@@ -8,4 +8,9 @@ cd "$ROOT/build"
 qmake6 "$ROOT/cutcap.pro"
 make -j"$(nproc)"
 
+# The module's type info is what qmllint reads; keep the committed copy in step with the build.
+if [ -f "$ROOT/build/cutcap.qmltypes" ]; then
+    cp -f "$ROOT/build/cutcap.qmltypes" "$ROOT/cutcap.qmltypes"
+fi
+
 echo "Built $ROOT/build/cutcap"

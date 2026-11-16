@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtMultimedia
 import CutCap
@@ -27,10 +29,10 @@ Item {
 
     function currentLane() {
         if (role === "base")
-            return backend.baseLane
+            return Backend.baseLane
         if (role === "overlay")
-            return backend.overlayLane
-        return backend.audioLane
+            return Backend.overlayLane
+        return Backend.audioLane
     }
 
     // forceSeek: the user moved the playhead (or edited the clip while paused).
@@ -49,7 +51,7 @@ Item {
         if (mediaPlayer.mediaStatus === MediaPlayer.NoMedia || mediaPlayer.mediaStatus === MediaPlayer.LoadingMedia)
             return
 
-        const playingClock = backend.playing && backend.clockLane === role
+        const playingClock = Backend.playing && Backend.clockLane === role
         const drift = Math.abs(mediaPlayer.position - d.positionMs)
         let seeked = false
         if (forceSeek ? drift > 15 : (!playingClock && drift > 300)) {
@@ -57,7 +59,7 @@ Item {
             seeked = true
         }
 
-        if (backend.playing) {
+        if (Backend.playing) {
             const ended = mediaPlayer.mediaStatus === MediaPlayer.EndOfMedia && !seeked
             if (mediaPlayer.playbackState !== MediaPlayer.PlayingState && !ended)
                 mediaPlayer.play()
@@ -85,8 +87,8 @@ Item {
         playbackRate: root.active ? root.lane.speed : 1.0
 
         onPositionChanged: (pos) => {
-            if (backend.playing && playbackState === MediaPlayer.PlayingState && backend.clockLane === root.role)
-                backend.syncPlayheadFromMedia(root.role, pos)
+            if (Backend.playing && playbackState === MediaPlayer.PlayingState && Backend.clockLane === root.role)
+                Backend.syncPlayheadFromMedia(root.role, pos)
         }
         onMediaStatusChanged: {
             if (mediaStatus === MediaPlayer.LoadedMedia) {
@@ -94,12 +96,12 @@ Item {
                 if (!d.active || source.toString() !== d.url)
                     return
                 position = d.positionMs
-                if (backend.playing)
+                if (Backend.playing)
                     play()
                 else
                     pause()
             } else if (mediaStatus === MediaPlayer.EndOfMedia) {
-                backend.laneReachedEnd(root.role)
+                Backend.laneReachedEnd(root.role)
             }
         }
     }
@@ -121,7 +123,7 @@ Item {
                                                 ? root.lane.mediaWidth / root.lane.mediaHeight
                                                 : parent.width / Math.max(1, parent.height)
             // Height of this clip once fitted into the export canvas (what boxblur's radius refers to).
-            readonly property real exportHeight: Math.min(backend.projectHeight, backend.projectWidth / mediaAspect)
+            readonly property real exportHeight: Math.min(Backend.projectHeight, Backend.projectWidth / mediaAspect)
             anchors.centerIn: parent
             width: root.fitToMedia ? Math.min(parent.width, parent.height * mediaAspect) : parent.width
             height: root.fitToMedia ? width / mediaAspect : parent.height

@@ -11,8 +11,8 @@ Rectangle {
 
     readonly property int headerWidth: 148
     readonly property int trackHeight: Design.trackH
-    readonly property real pxPerSec: backend.zoomPxPerSec
-    readonly property real timelineWidth: Math.max(timelineFlick.width, (backend.totalDuration + 10) * pxPerSec)
+    readonly property real pxPerSec: Backend.zoomPxPerSec
+    readonly property real timelineWidth: Math.max(timelineFlick.width, (Backend.totalDuration + 10) * pxPerSec)
 
     // Every live clip delegate, keyed by clip id. Captured once per drag so a group move can
     // translate the whole selection while the grabbed clip owns the pointer.
@@ -51,9 +51,9 @@ Rectangle {
     function dropUrlsAt(sceneX, sceneY, urls) {
         const target = dropTargetFor(sceneX, sceneY)
         if (!target)
-            backend.importMedia(urls)
+            Backend.importMedia(urls)
         else
-            backend.importMediaAt(urls, target.track, target.atSec)
+            Backend.importMediaAt(urls, target.track, target.atSec)
     }
 
     ColumnLayout {
@@ -68,31 +68,31 @@ Rectangle {
 
             ActionButton {
                 text: "Split (S)"
-                onClicked: backend.splitAtPlayhead()
+                onClicked: Backend.splitAtPlayhead()
             }
             ActionButton {
                 text: "Delete"
-                onClicked: backend.deleteSelected(false)
+                onClicked: Backend.deleteSelected(false)
             }
             ActionButton {
                 text: "Ripple Del"
-                onClicked: backend.deleteSelected(true)
+                onClicked: Backend.deleteSelected(true)
             }
 
             Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
 
             ActionButton {
                 text: "+ Text"
-                onClicked: backend.addTextAtPlayhead("Title", false)
+                onClicked: Backend.addTextAtPlayhead("Title", false)
             }
             ActionButton {
                 text: "+ Caption"
-                onClicked: backend.addTextAtPlayhead("Caption", true)
+                onClicked: Backend.addTextAtPlayhead("Caption", true)
             }
 
             Text {
-                visible: backend.selectedClipCount > 1
-                text: backend.selectedClipCount + " clips selected"
+                visible: Backend.selectedClipCount > 1
+                text: Backend.selectedClipCount + " clips selected"
                 color: Design.textSecondary
                 font.pixelSize: Design.tCaption
             }
@@ -109,14 +109,14 @@ Rectangle {
                 flat: true
                 fontPixelSize: Design.tTitle
                 implicitWidth: 30
-                onClicked: backend.zoomPxPerSec = backend.zoomPxPerSec * 0.8
+                onClicked: Backend.zoomPxPerSec = Backend.zoomPxPerSec * 0.8
             }
             ActionButton {
                 text: "+"
                 flat: true
                 fontPixelSize: Design.tTitle
                 implicitWidth: 30
-                onClicked: backend.zoomPxPerSec = backend.zoomPxPerSec * 1.25
+                onClicked: Backend.zoomPxPerSec = Backend.zoomPxPerSec * 1.25
             }
         }
 
@@ -162,8 +162,10 @@ Rectangle {
                         { label: "A1 Audio", col: Design.success, track: 2 }
                     ]
                     delegate: Rectangle {
-                        readonly property var laneState: modelData.track >= 0
-                                                            ? (backend.lanesList[modelData.track] || ({}))
+                        id: delegateRoot5
+                        required property var modelData
+                        readonly property var laneState: delegateRoot5.modelData.track >= 0
+                                                            ? (Backend.lanesList[delegateRoot5.modelData.track] || ({}))
                                                             : ({})
                         width: root.headerWidth
                         height: root.trackHeight
@@ -173,11 +175,11 @@ Rectangle {
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             width: 3
-                            color: modelData.col
+                            color: delegateRoot5.modelData.col
                             opacity: laneState.muted === true ? 0.35 : 1.0
                         }
                         Column {
-                            objectName: "laneLabel_" + modelData.label.replace(" ", "")
+                            objectName: "laneLabel_" + delegateRoot5.modelData.label.replace(" ", "")
                             // Reserve the strip the toggles occupy so a long lane name can never
                             // run under the controls; both columns are the same width on every row.
                             width: root.headerWidth - Design.s5 - laneToggles.width - Design.s3
@@ -187,7 +189,7 @@ Rectangle {
                             spacing: 0
                             Text {
                                 width: parent.width
-                                text: modelData.label
+                                text: delegateRoot5.modelData.label
                                 elide: Text.ElideRight
                                 color: laneState.locked === true ? Design.textSecondary : Design.textPrimary
                                 font.pixelSize: Design.tCaption
@@ -195,8 +197,8 @@ Rectangle {
                             }
                             Text {
                                 width: parent.width
-                                text: modelData.track < 0 ? "text"
-                                      : (modelData.track === 2 ? (laneState.muted ? "muted" : "audio")
+                                text: delegateRoot5.modelData.track < 0 ? "text"
+                                      : (delegateRoot5.modelData.track === 2 ? (laneState.muted ? "muted" : "audio")
                                                                : (laneState.locked ? "locked" : (laneState.muted ? "muted" : "video")))
                                 elide: Text.ElideRight
                                 color: Design.textSecondary
@@ -210,30 +212,30 @@ Rectangle {
                             anchors.rightMargin: Design.s2
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s1
-                            visible: modelData.track >= 0
+                            visible: delegateRoot5.modelData.track >= 0
                             LaneToggle {
-                                objectName: "laneToggle_" + modelData.label.replace(" ", "") + "_M"
+                                objectName: "laneToggle_" + delegateRoot5.modelData.label.replace(" ", "") + "_M"
                                 label: "M"
                                 active: laneState.muted === true
                                 activeColor: Design.warning
                                 toolTipText: "Mute this lane"
-                                onToggled: backend.setLaneState(modelData.track, "muted", !(laneState.muted === true))
+                                onToggled: Backend.setLaneState(delegateRoot5.modelData.track, "muted", !(laneState.muted === true))
                             }
                             LaneToggle {
-                                objectName: "laneToggle_" + modelData.label.replace(" ", "") + "_S"
+                                objectName: "laneToggle_" + delegateRoot5.modelData.label.replace(" ", "") + "_S"
                                 label: "S"
                                 active: laneState.solo === true
                                 activeColor: Design.accent
                                 toolTipText: "Solo this lane"
-                                onToggled: backend.setLaneState(modelData.track, "solo", !(laneState.solo === true))
+                                onToggled: Backend.setLaneState(delegateRoot5.modelData.track, "solo", !(laneState.solo === true))
                             }
                             LaneToggle {
-                                objectName: "laneToggle_" + modelData.label.replace(" ", "") + "_L"
+                                objectName: "laneToggle_" + delegateRoot5.modelData.label.replace(" ", "") + "_L"
                                 label: "L"
                                 active: laneState.locked === true
                                 activeColor: Design.danger
                                 toolTipText: "Lock this lane against edits"
-                                onToggled: backend.setLaneState(modelData.track, "locked", !(laneState.locked === true))
+                                onToggled: Backend.setLaneState(delegateRoot5.modelData.track, "locked", !(laneState.locked === true))
                             }
                         }
                         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.borderHairline }
@@ -282,11 +284,11 @@ Rectangle {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     onPressed: (mouse) => {
-                        backend.playheadSec = Math.max(0, mouse.x / root.pxPerSec)
+                        Backend.playheadSec = Math.max(0, mouse.x / root.pxPerSec)
                     }
                     onPositionChanged: (mouse) => {
                         if (pressed)
-                            backend.playheadSec = Math.max(0, mouse.x / root.pxPerSec)
+                            Backend.playheadSec = Math.max(0, mouse.x / root.pxPerSec)
                     }
                     onWheel: (wheel) => {
                         const maxX = Math.max(0, timelineFlick.contentWidth - timelineFlick.width)
@@ -370,11 +372,13 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: backend.clipsList
+                            model: Backend.clipsList
                             delegate: Loader {
-                                active: modelData.track === 1
+                                id: delegateRoot1
+                                required property var modelData
+                                active: delegateRoot1.modelData.track === 1
                                 sourceComponent: clipDelegate
-                                property var clipData: modelData
+                                property var clipData: delegateRoot1.modelData
                                 property color laneColor: Design.laneV2
                             }
                         }
@@ -399,11 +403,13 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: backend.clipsList
+                            model: Backend.clipsList
                             delegate: Loader {
-                                active: modelData.track === 0
+                                id: delegateRoot2
+                                required property var modelData
+                                active: delegateRoot2.modelData.track === 0
                                 sourceComponent: clipDelegate
-                                property var clipData: modelData
+                                property var clipData: delegateRoot2.modelData
                                 property color laneColor: Design.laneV1
                             }
                         }
@@ -420,22 +426,23 @@ Rectangle {
                         border.width: 1
 
                         Repeater {
-                            model: backend.textsList
+                            model: Backend.textsList
                             delegate: Rectangle {
+                                required property var modelData
                                 id: textItem
-                                x: modelData.startSec * root.pxPerSec
+                                x: textItem.modelData.startSec * root.pxPerSec
                                 y: 4
-                                width: Math.max(28, modelData.durationSec * root.pxPerSec)
+                                width: Math.max(28, textItem.modelData.durationSec * root.pxPerSec)
                                 height: root.trackHeight - 8
                                 radius: Design.rSm
                                 color: Qt.darker(Design.warning, 1.8)
-                                border.color: backend.selectedTextId === modelData.id ? Design.textPrimary : Design.warning
-                                border.width: backend.selectedTextId === modelData.id ? 2 : 1
+                                border.color: Backend.selectedTextId === textItem.modelData.id ? Design.textPrimary : Design.warning
+                                border.width: Backend.selectedTextId === textItem.modelData.id ? 2 : 1
 
                                 Text {
                                     anchors.fill: parent
                                     anchors.margins: 6
-                                    text: (modelData.isCaption ? "CC: " : "T: ") + modelData.text
+                                    text: (textItem.modelData.isCaption ? "CC: " : "T: ") + textItem.modelData.text
                                     color: Design.textPrimary
                                     font.pixelSize: Design.tCaption
                                     verticalAlignment: Text.AlignVCenter
@@ -448,8 +455,8 @@ Rectangle {
                                     drag.target: textItem
                                     drag.axis: Drag.XAxis
                                     drag.minimumX: 0
-                                    onPressed: backend.selectText(modelData.id)
-                                    onReleased: backend.moveText(modelData.id, textItem.x / root.pxPerSec)
+                                    onPressed: Backend.selectText(textItem.modelData.id)
+                                    onReleased: Backend.moveText(textItem.modelData.id, textItem.x / root.pxPerSec)
                                 }
                             }
                         }
@@ -472,11 +479,13 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: backend.clipsList
+                            model: Backend.clipsList
                             delegate: Loader {
-                                active: modelData.track === 2
+                                id: delegateRoot3
+                                required property var modelData
+                                active: delegateRoot3.modelData.track === 2
                                 sourceComponent: clipDelegate
-                                property var clipData: modelData
+                                property var clipData: delegateRoot3.modelData
                                 property color laneColor: Design.success
                             }
                         }
@@ -487,8 +496,8 @@ Rectangle {
 
                 // Snap guide: appears when a drag is within snapping distance of an edge.
                 Rectangle {
-                    visible: backend.snapGuideSec >= 0
-                    x: backend.snapGuideSec * root.pxPerSec
+                    visible: Backend.snapGuideSec >= 0
+                    x: Backend.snapGuideSec * root.pxPerSec
                     y: 24
                     width: 1
                     height: timelineFlick.contentHeight - 24
@@ -500,7 +509,7 @@ Rectangle {
                 // Playhead: 1px needle with a grab handle you can drag.
                 Item {
                     id: playhead
-                    x: backend.playheadSec * root.pxPerSec - width / 2
+                    x: Backend.playheadSec * root.pxPerSec - width / 2
                     y: 0
                     width: 13
                     height: parent.height
@@ -534,7 +543,7 @@ Rectangle {
                         drag.maximumX: timelineFlick.contentWidth - width / 2
                         onPositionChanged: {
                             if (drag.active)
-                                backend.playheadSec = Math.max(0, (playhead.x + width / 2) / root.pxPerSec)
+                                Backend.playheadSec = Math.max(0, (playhead.x + width / 2) / root.pxPerSec)
                         }
                     }
                 }
@@ -584,20 +593,22 @@ Rectangle {
         anchors.fill: parent
 
         Repeater {
-            model: backend.transitionPoints
+            model: Backend.transitionPoints
             delegate: Item {
-                visible: modelData.track === junctions.laneTrack
-                x: modelData.timeSec * root.pxPerSec - width / 2
+                id: delegateRoot6
+                required property var modelData
+                visible: delegateRoot6.modelData.track === junctions.laneTrack
+                x: delegateRoot6.modelData.timeSec * root.pxPerSec - width / 2
                 y: 0
                 width: 20
                 height: root.trackHeight
                 z: 30
 
                 Rectangle {
-                    visible: modelData.kind !== "none"
+                    visible: delegateRoot6.modelData.kind !== "none"
                     x: parent.width / 2 - width / 2
                     anchors.verticalCenter: parent.verticalCenter
-                    width: modelData.durationSec * root.pxPerSec
+                    width: delegateRoot6.modelData.durationSec * root.pxPerSec
                     height: parent.height - 8
                     radius: Design.rXs
                     color: Design.alpha(Design.accent, 0.22)
@@ -606,19 +617,19 @@ Rectangle {
                 }
 
                 Rectangle {
-                    objectName: "transitionChip_" + modelData.secondId
+                    objectName: "transitionChip_" + delegateRoot6.modelData.secondId
                     anchors.centerIn: parent
                     width: 18
                     height: 18
                     radius: Design.rXs
                     color: chipMouse.containsMouse ? Design.surfaceOverlay : Design.surfaceRaised
                     border.width: 1
-                    border.color: modelData.kind !== "none" ? Design.accent : Design.borderStrong
+                    border.color: delegateRoot6.modelData.kind !== "none" ? Design.accent : Design.borderStrong
 
                     Text {
                         anchors.centerIn: parent
                         text: "+"
-                        color: modelData.kind !== "none" ? Design.accent : Design.textSecondary
+                        color: delegateRoot6.modelData.kind !== "none" ? Design.accent : Design.textSecondary
                         font.pixelSize: Design.tMicro
                         font.weight: Design.wSemibold
                     }
@@ -631,43 +642,43 @@ Rectangle {
                     }
                     Menu {
                         id: chipMenu
-                        objectName: "transitionMenu_" + modelData.secondId
+                        objectName: "transitionMenu_" + delegateRoot6.modelData.secondId
                         // The model rebuilds when the transition changes, so commit after the menu closes.
                         MenuItem {
                             objectName: "transitionOption_none"
                             text: "No transition"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "none"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "none"))
                         }
                         MenuSeparator {}
                         MenuItem {
                             objectName: "transitionOption_fade"
                             text: "Fade"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "fade"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "fade"))
                         }
                         MenuItem {
                             objectName: "transitionOption_dissolve"
                             text: "Dissolve"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "dissolve"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "dissolve"))
                         }
                         MenuItem {
                             objectName: "transitionOption_wipeleft"
                             text: "Wipe left"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "wipeleft"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "wipeleft"))
                         }
                         MenuItem {
                             objectName: "transitionOption_wiperight"
                             text: "Wipe right"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "wiperight"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "wiperight"))
                         }
                         MenuItem {
                             objectName: "transitionOption_slideleft"
                             text: "Slide left"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "slideleft"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "slideleft"))
                         }
                         MenuItem {
                             objectName: "transitionOption_slideright"
                             text: "Slide right"
-                            onTriggered: Qt.callLater(() => backend.setTransitionBetween(modelData.firstId, modelData.secondId, "slideright"))
+                            onTriggered: Qt.callLater(() => Backend.setTransitionBetween(delegateRoot6.modelData.firstId, delegateRoot6.modelData.secondId, "slideright"))
                         }
                     }
                 }
@@ -698,17 +709,17 @@ Rectangle {
         }
         onPositionChanged: (drag) => {
             const raw = Math.max(0, drag.x / root.pxPerSec)
-            zone.ghostX = backend.previewSnap("", raw, zone.track) * root.pxPerSec
+            zone.ghostX = Backend.previewSnap("", raw, zone.track) * root.pxPerSec
         }
         onExited: {
             zone.acceptsSource = false
-            backend.clearSnapGuide()
+            Backend.clearSnapGuide()
         }
         onDropped: (drop) => {
             if (zone.acceptsSource)
-                backend.addAssetToTimeline(drop.source.assetId, zone.track, Math.max(0, drop.x / root.pxPerSec))
+                Backend.addAssetToTimeline(drop.source.assetId, zone.track, Math.max(0, drop.x / root.pxPerSec))
             zone.acceptsSource = false
-            backend.clearSnapGuide()
+            Backend.clearSnapGuide()
         }
 
         Rectangle {
@@ -739,8 +750,8 @@ Rectangle {
             id: clipBox
             objectName: "clipBody"
             readonly property string clipId: clipData ? clipData.id : ""
-            readonly property bool selected: backend.selectedClipIds.indexOf(clipData.id) >= 0
-            readonly property bool locked: (backend.lanesList[clipData.track] || ({})).locked === true
+            readonly property bool selected: Backend.selectedClipIds.indexOf(clipData.id) >= 0
+            readonly property bool locked: (Backend.lanesList[clipData.track] || ({})).locked === true
             property bool hovered: false
             property var dragOrigins: ({})
             property var dragItems: ({})
@@ -863,7 +874,9 @@ Rectangle {
             Repeater {
                 model: clipData.keyframes ? clipData.keyframes : []
                 delegate: Rectangle {
-                    x: Math.max(2, Math.min(clipBox.width - 10, modelData.timeSec * root.pxPerSec - 4))
+                    id: delegateRoot4
+                    required property var modelData
+                    x: Math.max(2, Math.min(clipBox.width - 10, delegateRoot4.modelData.timeSec * root.pxPerSec - 4))
                     y: clipBox.height - 12
                     width: 8
                     height: 8
@@ -903,7 +916,7 @@ Rectangle {
                     property real origW: 0
                     onPressed: (mouse) => {
                         if (!clipBox.selected)
-                            backend.selectClip(clipData.id)
+                            Backend.selectClip(clipData.id)
                         startGlobalX = mapToGlobal(mouse.x, 0).x
                         origX = clipBox.x
                         origW = clipBox.width
@@ -921,7 +934,7 @@ Rectangle {
                         const deltaSec = newStart - clipData.timelineStartSec
                         const newDur = Math.max(0.2, clipBox.width / root.pxPerSec)
                         const newSourceIn = Math.max(0, clipData.sourceInSec + deltaSec * clipData.speed)
-                        backend.trimClip(clipData.id, newStart, newDur, newSourceIn)
+                        Backend.trimClip(clipData.id, newStart, newDur, newSourceIn)
                     }
                 }
             }
@@ -931,26 +944,26 @@ Rectangle {
                 id: clipContextMenu
                 MenuItem {
                     text: "Split at Playhead (S)"
-                    onTriggered: backend.splitAtPlayhead()
+                    onTriggered: Backend.splitAtPlayhead()
                 }
                 MenuItem {
                     text: clipData.track === 0 ? "Move to V2 Overlay (PiP)" : "Move to V1 Main Video"
                     visible: clipData.kind !== "audio" && clipData.track !== 2
-                    onTriggered: backend.moveClip(clipData.id, clipData.timelineStartSec, clipData.track === 0 ? 1 : 0)
+                    onTriggered: Backend.moveClip(clipData.id, clipData.timelineStartSec, clipData.track === 0 ? 1 : 0)
                 }
                 MenuSeparator {}
                 MenuItem {
                     text: "Delete Clip (Del)"
                     onTriggered: {
-                        backend.selectClip(clipData.id)
-                        backend.deleteSelected(false)
+                        Backend.selectClip(clipData.id)
+                        Backend.deleteSelected(false)
                     }
                 }
                 MenuItem {
                     text: "Ripple Delete (Shift+Del)"
                     onTriggered: {
-                        backend.selectClip(clipData.id)
-                        backend.deleteSelected(true)
+                        Backend.selectClip(clipData.id)
+                        Backend.deleteSelected(true)
                     }
                 }
             }
@@ -970,16 +983,16 @@ Rectangle {
                 onPressed: (mouse) => {
                     if (mouse.button === Qt.RightButton) {
                         if (!clipBox.selected)
-                            backend.selectClip(clipData.id)
+                            Backend.selectClip(clipData.id)
                         clipContextMenu.popup()
                         return
                     }
                     if (mouse.modifiers & Qt.ControlModifier)
-                        backend.selectClipAdditive(clipData.id)
+                        Backend.selectClipAdditive(clipData.id)
                     else if (mouse.modifiers & Qt.ShiftModifier)
-                        backend.selectClipRange(clipData.id)
+                        Backend.selectClipRange(clipData.id)
                     else if (!clipBox.selected)
-                        backend.selectClip(clipData.id)
+                        Backend.selectClip(clipData.id)
 
                     pressGlobalY = mapToGlobal(0, mouse.y).y
                     pressStartSec = clipData.timelineStartSec
@@ -987,7 +1000,7 @@ Rectangle {
                     // Capture every selected clip's own position so the group keeps its spacing.
                     clipBox.dragItems = root.clipItemSnapshot()
                     const origins = ({})
-                    for (const id of backend.selectedClipIds) {
+                    for (const id of Backend.selectedClipIds) {
                         const item = clipBox.dragItems[id]
                         if (item)
                             origins[id] = item.x
@@ -998,20 +1011,20 @@ Rectangle {
                     if (!drag.active || clipBox.locked)
                         return
                     // Same snapping rule the commit will use, so the guide never lies.
-                    const snapped = backend.previewSnap(clipData.id, Math.max(0, clipBox.x / root.pxPerSec), clipData.track)
+                    const snapped = Backend.previewSnap(clipData.id, Math.max(0, clipBox.x / root.pxPerSec), clipData.track)
                     clipBox.x = snapped * root.pxPerSec
                     const grabX = clipBox.dragOrigins[clipData.id]
                     if (grabX === undefined)
                         return
                     const deltaPx = clipBox.x - grabX
-                    for (const id of backend.selectedClipIds) {
+                    for (const id of Backend.selectedClipIds) {
                         const item = clipBox.dragItems[id]
                         if (item && item !== clipBox && clipBox.dragOrigins[id] !== undefined)
                             item.x = Math.max(0, clipBox.dragOrigins[id] + deltaPx)
                     }
                 }
                 onReleased: (mouse) => {
-                    backend.clearSnapGuide()
+                    Backend.clearSnapGuide()
                     if (mouse.button === Qt.RightButton)
                         return
                     let targetTrack = pressTrack
@@ -1022,7 +1035,7 @@ Rectangle {
                         else if (dy > root.trackHeight * 0.55)
                             targetTrack = 0
                     }
-                    backend.moveSelectedClips(clipBox.x / root.pxPerSec - pressStartSec, targetTrack - pressTrack)
+                    Backend.moveSelectedClips(clipBox.x / root.pxPerSec - pressStartSec, targetTrack - pressTrack)
                     clipBox.dragOrigins = ({})
                     clipBox.dragItems = ({})
                 }
@@ -1045,7 +1058,7 @@ Rectangle {
                     property real origDur: 0
                     onPressed: (mouse) => {
                         if (!clipBox.selected)
-                            backend.selectClip(clipData.id)
+                            Backend.selectClip(clipData.id)
                         startX = mapToGlobal(mouse.x, 0).x
                         origDur = clipData.durationSec
                     }
@@ -1056,7 +1069,7 @@ Rectangle {
                     }
                     onReleased: {
                         const newDur = Math.max(0.2, clipBox.width / root.pxPerSec)
-                        backend.trimClip(clipData.id, clipData.timelineStartSec, newDur, clipData.sourceInSec)
+                        Backend.trimClip(clipData.id, clipData.timelineStartSec, newDur, clipData.sourceInSec)
                     }
                 }
             }

@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -6,6 +8,8 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
+
+    signal importRequested()
     color: Design.surfacePanel
     clip: true
 
@@ -43,7 +47,7 @@ Rectangle {
                     text: "Import"
                     flat: true
                     toolTipText: "Import media, projects or subtitles (Ctrl+O)"
-                    onClicked: importDialog.open()
+                    onClicked: root.importRequested()
                 }
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.borderHairline }
@@ -55,7 +59,7 @@ Rectangle {
         Layout.fillHeight: true
         spacing: 0
         clip: true
-        model: backend.assetsList
+        model: Backend.assetsList
 
         Label {
             anchors.centerIn: parent
@@ -67,6 +71,9 @@ Rectangle {
         }
 
         delegate: Item {
+            id: delegateRoot1
+            required property int index
+            required property var modelData
             width: assetsListView.width
             height: 64
 
@@ -87,10 +94,10 @@ Rectangle {
                     visible: index < assetsListView.count - 1
                 }
 
-                property string assetId: modelData.id
-                property string assetKind: modelData.kind
-                property string assetName: modelData.name
-                property real assetDuration: modelData.durationSec
+                property string assetId: delegateRoot1.modelData.id
+                property string assetKind: delegateRoot1.modelData.kind
+                property string assetName: delegateRoot1.modelData.name
+                property real assetDuration: delegateRoot1.modelData.durationSec
                 property bool hovered: assetDragArea.containsMouse || assetDragArea.drag.active
 
                 Drag.active: assetDragArea.drag.active
@@ -101,7 +108,7 @@ Rectangle {
 
                 states: State {
                     when: assetDragArea.drag.active
-                    ParentChange { target: assetCard; parent: win.contentItem }
+                    ParentChange { target: assetCard; parent: Window.window.contentItem }
                     PropertyChanges { assetCard.z: 500; assetCard.opacity: 0.85 }
                 }
 
@@ -125,17 +132,17 @@ Rectangle {
                                 anchors.fill: parent
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
-                                source: modelData.thumbnailPath ? ("file://" + modelData.thumbnailPath) : ""
-                                visible: modelData.kind !== "audio"
+                                source: delegateRoot1.modelData.thumbnailPath ? ("file://" + delegateRoot1.modelData.thumbnailPath) : ""
+                                visible: delegateRoot1.modelData.kind !== "audio"
                             }
 
                             Row {
                                 id: thumbWave
-                                readonly property var peaks: modelData.waveformPeaks || []
+                                readonly property var peaks: delegateRoot1.modelData.waveformPeaks || []
                                 anchors.centerIn: parent
                                 height: parent.height - 10
                                 spacing: 1
-                                visible: modelData.kind === "audio"
+                                visible: delegateRoot1.modelData.kind === "audio"
                                 Repeater {
                                     model: thumbWave.visible ? 22 : 0
                                     delegate: Item {
@@ -159,7 +166,7 @@ Rectangle {
                             spacing: 2
                             Text {
                                 objectName: "assetName"
-                                text: modelData.name
+                                text: delegateRoot1.modelData.name
                                 color: Design.textPrimary
                                 font.pixelSize: Design.tBody
                                 font.weight: Design.wSemibold
@@ -173,11 +180,11 @@ Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.hCompact
 
-                                readonly property int seconds: Math.round(modelData.durationSec)
-                                readonly property string baseMeta: (modelData.kind === "audio" ? "Audio" : modelData.kind === "image" ? "Image" : "Video")
+                                readonly property int seconds: Math.round(delegateRoot1.modelData.durationSec)
+                                readonly property string baseMeta: (delegateRoot1.modelData.kind === "audio" ? "Audio" : delegateRoot1.modelData.kind === "image" ? "Image" : "Video")
                                                                    + " · " + Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0")
-                                readonly property string fullMeta: modelData.kind !== "audio"
-                                                                   ? (baseMeta + " · " + modelData.width + "×" + modelData.height)
+                                readonly property string fullMeta: delegateRoot1.modelData.kind !== "audio"
+                                                                   ? (baseMeta + " · " + delegateRoot1.modelData.width + "×" + delegateRoot1.modelData.height)
                                                                    : baseMeta
 
                                 TextMetrics {
@@ -205,17 +212,17 @@ Rectangle {
                                     visible: assetCard.hovered
 
                                     ActionButton {
-                                        text: modelData.kind === "audio" ? "→ A1" : "→ V1"
+                                        text: delegateRoot1.modelData.kind === "audio" ? "→ A1" : "→ V1"
                                         flat: true
-                                        toolTipText: "Append to " + (modelData.kind === "audio" ? "A1 audio" : "V1 main video")
-                                        onClicked: backend.addAssetToTimeline(modelData.id, modelData.kind === "audio" ? 2 : 0, -1)
+                                        toolTipText: "Append to " + (delegateRoot1.modelData.kind === "audio" ? "A1 audio" : "V1 main video")
+                                        onClicked: Backend.addAssetToTimeline(delegateRoot1.modelData.id, delegateRoot1.modelData.kind === "audio" ? 2 : 0, -1)
                                     }
                                     ActionButton {
                                         text: "→ V2"
                                         flat: true
-                                        visible: modelData.kind !== "audio"
+                                        visible: delegateRoot1.modelData.kind !== "audio"
                                         toolTipText: "Place on V2 overlay at the playhead"
-                                        onClicked: backend.addAssetToTimeline(modelData.id, 1, backend.playheadSec)
+                                        onClicked: Backend.addAssetToTimeline(delegateRoot1.modelData.id, 1, Backend.playheadSec)
                                     }
                                     ActionButton {
                                         text: "×"
@@ -223,7 +230,7 @@ Rectangle {
                                         implicitWidth: Design.hCompact
                                         textColor: Design.danger
                                         toolTipText: "Remove from media bin"
-                                        onClicked: backend.removeAsset(modelData.id)
+                                        onClicked: Backend.removeAsset(delegateRoot1.modelData.id)
                                     }
                                     Item { Layout.fillWidth: true }
                                 }
@@ -249,13 +256,13 @@ Rectangle {
                 }
 
                 ToolTip.visible: assetDragArea.containsMouse && !assetDragArea.drag.active
-                ToolTip.text: modelData.name + " (" + (modelData.kind !== "audio"
-                    ? ((modelData.kind === "image" ? "Image" : "Video") + " · "
-                       + Math.floor(Math.round(modelData.durationSec) / 60) + ":"
-                       + String(Math.round(modelData.durationSec) % 60).padStart(2, "0")
-                       + " · " + modelData.width + "×" + modelData.height)
-                    : ("Audio · " + Math.floor(Math.round(modelData.durationSec) / 60) + ":"
-                       + String(Math.round(modelData.durationSec) % 60).padStart(2, "0"))) + ")"
+                ToolTip.text: delegateRoot1.modelData.name + " (" + (delegateRoot1.modelData.kind !== "audio"
+                    ? ((delegateRoot1.modelData.kind === "image" ? "Image" : "Video") + " · "
+                       + Math.floor(Math.round(delegateRoot1.modelData.durationSec) / 60) + ":"
+                       + String(Math.round(delegateRoot1.modelData.durationSec) % 60).padStart(2, "0")
+                       + " · " + delegateRoot1.modelData.width + "×" + delegateRoot1.modelData.height)
+                    : ("Audio · " + Math.floor(Math.round(delegateRoot1.modelData.durationSec) / 60) + ":"
+                       + String(Math.round(delegateRoot1.modelData.durationSec) % 60).padStart(2, "0"))) + ")"
                 ToolTip.delay: 450
             }
         }

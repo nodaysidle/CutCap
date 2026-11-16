@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -6,12 +8,14 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
+
+    signal importRequested()
     color: Design.surfacePanel
     radius: 0
     border.width: 0
     clip: true
 
-    readonly property real aspectRatio: backend.projectWidth / Math.max(1, backend.projectHeight)
+    readonly property real aspectRatio: Backend.projectWidth / Math.max(1, Backend.projectHeight)
 
     function syncLanes(forceSeek) {
         baseLane.sync(forceSeek)
@@ -22,8 +26,8 @@ Rectangle {
     Component.onCompleted: syncLanes(true)
 
     Connections {
-        target: backend
-        function onPreviewChanged() { root.syncLanes(!backend.playing) }
+        target: Backend
+        function onPreviewChanged() { root.syncLanes(!Backend.playing) }
         function onSeekRequested() { root.syncLanes(true) }
         function onPlaybackChanged() { root.syncLanes(false) }
     }
@@ -32,7 +36,7 @@ Rectangle {
         id: audioLane
         role: "audio"
         audioOnly: true
-        lane: backend.audioLane
+        lane: Backend.audioLane
     }
 
     ColumnLayout {
@@ -55,14 +59,14 @@ Rectangle {
                 border.color: Design.borderHairline
                 border.width: 1
 
-                readonly property real pixelScale: height / Math.max(1, backend.projectHeight)
+                readonly property real pixelScale: height / Math.max(1, Backend.projectHeight)
 
                 PreviewLane {
                     id: baseLane
                     objectName: "baseLane"
                     role: "base"
                     anchors.fill: parent
-                    lane: backend.baseLane
+                    lane: Backend.baseLane
                 }
 
                 PreviewLane {
@@ -71,14 +75,14 @@ Rectangle {
                     role: "overlay"
                     anchors.fill: parent
                     fitToMedia: true
-                    lane: backend.overlayLane
+                    lane: Backend.overlayLane
                 }
 
                 // A gap in the timeline plays as black, like the export. Only an empty project gets a prompt.
                 Column {
                     anchors.centerIn: parent
                     spacing: 10
-                    visible: backend.clipsList.length === 0
+                    visible: Backend.clipsList.length === 0
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Drop video, audio or images here"
@@ -98,42 +102,43 @@ Rectangle {
                         fontPixelSize: Design.tBody
                         horizontalPadding: Design.s6
                         verticalPadding: Design.s3
-                        onClicked: importDialog.open()
+                        onClicked: root.importRequested()
                     }
                 }
 
                 Repeater {
-                    model: backend.activeTexts
+                    model: Backend.activeTexts
                     delegate: Rectangle {
+                        required property var modelData
                         id: txtBox
-                        x: modelData.x * canvasBox.width - width / 2
-                        y: modelData.y * canvasBox.height - height / 2
+                        x: txtBox.modelData.x * canvasBox.width - width / 2
+                        y: txtBox.modelData.y * canvasBox.height - height / 2
                         width: overlayLabel.implicitWidth + 20
                         height: overlayLabel.implicitHeight + 10
                         radius: Design.rMd
-                        color: Design.alpha(modelData.bgColor, modelData.bgOpacity)
-                        border.color: backend.selectedTextId === modelData.id ? Design.accent : "transparent"
+                        color: Design.alpha(txtBox.modelData.bgColor, txtBox.modelData.bgOpacity)
+                        border.color: Backend.selectedTextId === txtBox.modelData.id ? Design.accent : "transparent"
                         border.width: 1
 
                         Text {
                             id: overlayLabel
                             anchors.centerIn: parent
-                            text: modelData.text
-                            color: modelData.color
-                            font.pixelSize: Math.max(10, Math.round(modelData.fontSize * canvasBox.pixelScale))
-                            font.bold: modelData.bold
+                            text: txtBox.modelData.text
+                            color: txtBox.modelData.color
+                            font.pixelSize: Math.max(10, Math.round(txtBox.modelData.fontSize * canvasBox.pixelScale))
+                            font.bold: txtBox.modelData.bold
                             horizontalAlignment: Text.AlignHCenter
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             drag.target: txtBox
-                            onPressed: backend.selectText(modelData.id)
+                            onPressed: Backend.selectText(txtBox.modelData.id)
                             onReleased: {
                                 const nx = (txtBox.x + txtBox.width / 2) / canvasBox.width
                                 const ny = (txtBox.y + txtBox.height / 2) / canvasBox.height
-                                backend.updateTextProperty(modelData.id, "x", nx)
-                                backend.updateTextProperty(modelData.id, "y", ny)
+                                Backend.updateTextProperty(txtBox.modelData.id, "x", nx)
+                                Backend.updateTextProperty(txtBox.modelData.id, "y", ny)
                             }
                         }
                     }
@@ -159,7 +164,7 @@ Rectangle {
 
                 Text {
                     objectName: "transportPlayhead"
-                    text: backend.formatTimecode(backend.playheadSec)
+                    text: Backend.formatTimecode(Backend.playheadSec)
                     color: Design.textPrimary
                     font.family: "monospace"
                     font.pixelSize: Design.tBody
@@ -169,7 +174,7 @@ Rectangle {
                     objectName: "transportDuration"
                     // Secondary metadata: shown only when the row can hold it next to every control.
                     visible: transportRow.width >= 400
-                    text: "/ " + backend.formatTimecode(backend.totalDuration)
+                    text: "/ " + Backend.formatTimecode(Backend.totalDuration)
                     color: Design.textSecondary
                     font.family: "monospace"
                     font.pixelSize: Design.tMicro
@@ -183,17 +188,17 @@ Rectangle {
                     flat: true
                     horizontalPadding: Design.s2
                     fontPixelSize: Design.tBody
-                    onClicked: backend.playheadSec = Math.max(0, backend.playheadSec - 1.0)
+                    onClicked: Backend.playheadSec = Math.max(0, Backend.playheadSec - 1.0)
                 }
 
                 ActionButton {
                     objectName: "transportPlay"
-                    text: backend.playing ? "Pause" : "Play"
+                    text: Backend.playing ? "Pause" : "Play"
                     highlighted: true
                     horizontalPadding: Design.s4
                     fontPixelSize: Design.tBody
                     fontBold: true
-                    onClicked: backend.playing = !backend.playing
+                    onClicked: Backend.playing = !Backend.playing
                 }
 
                 ActionButton {
@@ -202,7 +207,7 @@ Rectangle {
                     flat: true
                     horizontalPadding: Design.s2
                     fontPixelSize: Design.tBody
-                    onClicked: backend.playheadSec = backend.playheadSec + 1.0
+                    onClicked: Backend.playheadSec = Backend.playheadSec + 1.0
                 }
 
                 Item { Layout.fillWidth: true }
@@ -218,15 +223,15 @@ Rectangle {
                     leftPadding: Design.s2
                     topInset: 0
                     bottomInset: 0
-                    currentIndex: backend.projectWidth === backend.projectHeight
-                                  ? 2 : (backend.projectWidth < backend.projectHeight ? 1 : 0)
+                    currentIndex: Backend.projectWidth === Backend.projectHeight
+                                  ? 2 : (Backend.projectWidth < Backend.projectHeight ? 1 : 0)
                     onActivated: (index) => {
                         if (index === 0)
-                            backend.setProjectResolution(1920, 1080)
+                            Backend.setProjectResolution(1920, 1080)
                         else if (index === 1)
-                            backend.setProjectResolution(1080, 1920)
+                            Backend.setProjectResolution(1080, 1920)
                         else
-                            backend.setProjectResolution(1080, 1080)
+                            Backend.setProjectResolution(1080, 1080)
                     }
                 }
             }

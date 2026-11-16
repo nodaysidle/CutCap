@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -14,7 +16,7 @@ Dialog {
     padding: Design.s5
     header: Item { implicitHeight: 0; visible: false }
 
-    Material.theme: theme.darkMode ? Material.Dark : Material.Light
+    Material.theme: Theme.darkMode ? Material.Dark : Material.Light
     Material.accent: Design.accent
     Material.background: Design.surfaceOverlay
     Material.foreground: Design.textPrimary
@@ -32,10 +34,10 @@ Dialog {
     readonly property string selectedResolution: resCombo.currentValue || "project"
     readonly property var estimate: {
         // Re-evaluate whenever timeline clips, project resolution, or combo selections change.
-        const _clips = backend.clipsList.length
-        const _w = backend.projectWidth
-        const _h = backend.projectHeight
-        return backend.estimateExport(selectedPreset, selectedCodec, selectedResolution)
+        const _clips = Backend.clipsList.length
+        const _w = Backend.projectWidth
+        const _h = Backend.projectHeight
+        return Backend.estimateExport(selectedPreset, selectedCodec, selectedResolution)
     }
 
     FileDialog {
@@ -45,12 +47,12 @@ Dialog {
         nameFilters: ["MP4 Video (*.mp4)", "Matroska (*.mkv)", "QuickTime (*.mov)"]
         onAccepted: {
             root.selectedPath = selectedFile.toString()
-            backend.startExport(root.selectedPath, root.selectedPreset, root.selectedCodec, root.selectedResolution)
+            Backend.startExport(root.selectedPath, root.selectedPreset, root.selectedCodec, root.selectedResolution)
         }
     }
 
     Connections {
-        target: backend
+        target: Backend
         function onExportFinished(ok, message) {
             if (ok) {
                 resultText.color = Design.success
@@ -135,7 +137,7 @@ Dialog {
                 textRole: "text"
                 valueRole: "value"
                 model: [
-                    { text: "Project (" + backend.projectWidth + "×" + backend.projectHeight + ")", value: "project" },
+                    { text: "Project (" + Backend.projectWidth + "×" + Backend.projectHeight + ")", value: "project" },
                     { text: "4K UHD (3840×2160)", value: "4k" },
                     { text: "Vertical (1080×1920)", value: "vertical" }
                 ]
@@ -192,8 +194,8 @@ Dialog {
 
         ProgressBar {
             Layout.fillWidth: true
-            visible: backend.exporting || backend.exportProgress > 0
-            value: backend.exportProgress
+            visible: Backend.exporting || Backend.exportProgress > 0
+            value: Backend.exportProgress
         }
 
         Text {
@@ -205,7 +207,7 @@ Dialog {
         }
 
         Text {
-            visible: backend.clipsList.length === 0
+            visible: Backend.clipsList.length === 0
             Layout.fillWidth: true
             text: "Add at least one clip to the timeline before exporting."
             color: Design.warning
@@ -221,19 +223,19 @@ Dialog {
             Item { Layout.fillWidth: true }
             ActionButton {
                 objectName: "exportCancelButton"
-                text: backend.exporting ? "Cancel Export" : "Close"
+                text: Backend.exporting ? "Cancel Export" : "Close"
                 fontPixelSize: Design.tBody
                 horizontalPadding: Design.s5
                 verticalPadding: Design.s2
                 onClicked: {
-                    if (backend.exporting) backend.cancelExport()
+                    if (Backend.exporting) Backend.cancelExport()
                     else root.close()
                 }
             }
             ActionButton {
                 objectName: "exportStartButton"
                 text: "Choose File & Export"
-                enabled: !backend.exporting && backend.clipsList.length > 0 && root.estimate.codecSupported
+                enabled: !Backend.exporting && Backend.clipsList.length > 0 && root.estimate.codecSupported
                 highlighted: true
                 fontPixelSize: Design.tBody
                 horizontalPadding: Design.s5

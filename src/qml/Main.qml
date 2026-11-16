@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -12,10 +14,10 @@ ApplicationWindow {
     height: 900
     minimumWidth: 880
     minimumHeight: 580
-    title: backend.projectTitle + (backend.dirty ? " *" : "") + " — CutCap"
+    title: Backend.projectTitle + (Backend.dirty ? " *" : "") + " — CutCap"
     color: Design.surfaceSunken
 
-    Material.theme: theme.darkMode ? Material.Dark : Material.Light
+    Material.theme: Theme.darkMode ? Material.Dark : Material.Light
     Material.accent: Design.accent
     Material.background: Design.surfacePanel
     Material.foreground: Design.textPrimary
@@ -44,7 +46,7 @@ ApplicationWindow {
     }
 
     function runUnlessDirty(action) {
-        if (!backend.dirty) {
+        if (!Backend.dirty) {
             action()
             return
         }
@@ -53,8 +55,8 @@ ApplicationWindow {
     }
 
     function saveThenRun(action) {
-        if (backend.projectPath.length > 0) {
-            if (backend.saveProject() && action)
+        if (Backend.projectPath.length > 0) {
+            if (Backend.saveProject() && action)
                 action()
             return
         }
@@ -63,7 +65,7 @@ ApplicationWindow {
     }
 
     onClosing: (close) => {
-        if (allowClose || !backend.dirty)
+        if (allowClose || !Backend.dirty)
             return
         close.accepted = false
         pendingDiscard = () => {
@@ -105,9 +107,9 @@ ApplicationWindow {
         onAccepted: {
             const files = selectedFiles
             if (win.urlsReplaceProject(files))
-                win.runUnlessDirty(() => backend.importMedia(files))
+                win.runUnlessDirty(() => Backend.importMedia(files))
             else
-                backend.importMedia(files)
+                Backend.importMedia(files)
         }
     }
 
@@ -119,7 +121,7 @@ ApplicationWindow {
         onAccepted: {
             const action = win.pendingSave
             win.pendingSave = null
-            if (backend.saveProject(selectedFile) && action)
+            if (Backend.saveProject(selectedFile) && action)
                 action()
         }
         onRejected: win.pendingSave = null
@@ -132,7 +134,7 @@ ApplicationWindow {
         nameFilters: ["CutCap Project (*.cutcap)"]
         onAccepted: {
             const file = selectedFile
-            win.runUnlessDirty(() => backend.openProject(file))
+            win.runUnlessDirty(() => Backend.openProject(file))
         }
     }
 
@@ -141,7 +143,7 @@ ApplicationWindow {
         title: "Import Subtitles (.srt)"
         fileMode: FileDialog.OpenFile
         nameFilters: ["SubRip Subtitles (*.srt)"]
-        onAccepted: backend.importSrtFile(selectedFile)
+        onAccepted: Backend.importSrtFile(selectedFile)
     }
 
     FileDialog {
@@ -149,7 +151,7 @@ ApplicationWindow {
         title: "Export Subtitles (.srt)"
         fileMode: FileDialog.SaveFile
         nameFilters: ["SubRip Subtitles (*.srt)"]
-        onAccepted: backend.exportSrtFile(selectedFile)
+        onAccepted: Backend.exportSrtFile(selectedFile)
     }
 
     ExportDialog {
@@ -165,7 +167,7 @@ ApplicationWindow {
         sequence: "Ctrl+A"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.selectAllClips()
+        onActivated: Backend.selectAllClips()
     }
     Shortcut {
         sequence: "Escape"
@@ -173,52 +175,52 @@ ApplicationWindow {
                  !importDialog.visible && !saveProjectDialog.visible &&
                  !openProjectDialog.visible && !importSrtDialog.visible && !exportSrtDialog.visible
         context: Qt.ApplicationShortcut
-        onActivated: backend.clearClipSelection()
+        onActivated: Backend.clearClipSelection()
     }
     Shortcut {
         sequence: "Space"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.playing = !backend.playing
+        onActivated: Backend.playing = !Backend.playing
     }
     Shortcut {
         sequence: "S"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.splitAtPlayhead()
+        onActivated: Backend.splitAtPlayhead()
     }
     Shortcut {
         sequence: "Ctrl+B"
         context: Qt.ApplicationShortcut
-        onActivated: backend.splitAtPlayhead()
+        onActivated: Backend.splitAtPlayhead()
     }
     Shortcut {
         sequence: "Delete"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.deleteSelected(false)
+        onActivated: Backend.deleteSelected(false)
     }
     Shortcut {
         sequence: "Backspace"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.deleteSelected(false)
+        onActivated: Backend.deleteSelected(false)
     }
     Shortcut {
         sequence: "Shift+Delete"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.deleteSelected(true)
+        onActivated: Backend.deleteSelected(true)
     }
     Shortcut {
         sequences: [StandardKey.Undo]
         context: Qt.ApplicationShortcut
-        onActivated: backend.undo()
+        onActivated: Backend.undo()
     }
     Shortcut {
         sequences: [StandardKey.Redo]
         context: Qt.ApplicationShortcut
-        onActivated: backend.redo()
+        onActivated: Backend.redo()
     }
     Shortcut {
         sequence: "Ctrl+O"
@@ -229,7 +231,7 @@ ApplicationWindow {
         sequence: "Ctrl+S"
         context: Qt.ApplicationShortcut
         onActivated: {
-            if (backend.projectPath.length > 0) backend.saveProject()
+            if (Backend.projectPath.length > 0) Backend.saveProject()
             else saveProjectDialog.open()
         }
     }
@@ -242,13 +244,13 @@ ApplicationWindow {
         sequence: "Left"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.playheadSec = Math.max(0, backend.playheadSec - 0.1)
+        onActivated: Backend.playheadSec = Math.max(0, Backend.playheadSec - 0.1)
     }
     Shortcut {
         sequence: "Right"
         enabled: !win.isTyping
         context: Qt.ApplicationShortcut
-        onActivated: backend.playheadSec = backend.playheadSec + 0.1
+        onActivated: Backend.playheadSec = Backend.playheadSec + 0.1
     }
     Shortcut {
         sequence: "?"
@@ -271,7 +273,7 @@ ApplicationWindow {
         width: Math.min(420, win.width - Design.s6 * 2)
         padding: Design.s5
 
-        Material.theme: theme.darkMode ? Material.Dark : Material.Light
+        Material.theme: Theme.darkMode ? Material.Dark : Material.Light
         Material.accent: Design.accent
         Material.background: Design.surfaceOverlay
         Material.foreground: Design.textPrimary
@@ -363,7 +365,7 @@ ApplicationWindow {
         anchors.topMargin: 56
         width: Math.min(620, parent.width - 48)
         height: errText.implicitHeight + 20
-        radius: controlRadius
+        radius: win.controlRadius
         color: Design.surfaceOverlay
         border.color: Design.danger
         border.width: 1
@@ -410,7 +412,7 @@ ApplicationWindow {
     }
 
     Connections {
-        target: backend
+        target: Backend
         function onErrorOccurred(msg) {
             errText.text = msg
             errorBanner.visible = true
@@ -455,7 +457,7 @@ ApplicationWindow {
                     id: titleField
                     objectName: "titleField"
                     Accessible.name: "Project title"
-                    text: backend.projectTitle
+                    text: Backend.projectTitle
                     color: Design.textPrimary
                     font.pixelSize: Design.tBodyLg
                     font.weight: Design.wMedium
@@ -476,12 +478,12 @@ ApplicationWindow {
                             color: titleField.activeFocus ? Design.accent : "transparent"
                         }
                     }
-                    onEditingFinished: backend.setProjectTitle(text)
+                    onEditingFinished: Backend.setProjectTitle(text)
                 }
 
                 Text {
                     objectName: "dirtyBadge"
-                    visible: backend.dirty
+                    visible: Backend.dirty
                     text: "unsaved"
                     color: Design.textSecondary
                     font.pixelSize: Design.tMicro
@@ -490,7 +492,7 @@ ApplicationWindow {
 
                 Text {
                     objectName: "importingBadge"
-                    visible: backend.importing > 0
+                    visible: Backend.importing > 0
                     text: "preparing"
                     color: Design.textSecondary
                     font.pixelSize: Design.tMicro
@@ -506,12 +508,12 @@ ApplicationWindow {
                     flat: true
                     horizontalPadding: Design.s3
                     onClicked: {
-                        if (backend.projectPath.length > 0) backend.saveProject()
+                        if (Backend.projectPath.length > 0) Backend.saveProject()
                         else saveProjectDialog.open()
                     }
                 }
-                ActionButton { text: "Undo"; flat: true; horizontalPadding: Design.s3; enabled: backend.canUndo; onClicked: backend.undo() }
-                ActionButton { text: "Redo"; flat: true; horizontalPadding: Design.s3; enabled: backend.canRedo; onClicked: backend.redo() }
+                ActionButton { text: "Undo"; flat: true; horizontalPadding: Design.s3; enabled: Backend.canUndo; onClicked: Backend.undo() }
+                ActionButton { text: "Redo"; flat: true; horizontalPadding: Design.s3; enabled: Backend.canRedo; onClicked: Backend.redo() }
 
                 Item {
                     Layout.fillWidth: true
@@ -521,7 +523,7 @@ ApplicationWindow {
                 Text {
                     id: topBarStatus
                     objectName: "topBarStatus"
-                    text: backend.statusMessage
+                    text: Backend.statusMessage
                     color: Design.textSecondary
                     font.pixelSize: Design.tCaption
                     elide: Text.ElideRight
@@ -537,7 +539,7 @@ ApplicationWindow {
                         acceptedButtons: Qt.NoButton
                     }
                     ToolTip.visible: topBarStatus.truncated && statusHover.containsMouse
-                    ToolTip.text: backend.statusMessage
+                    ToolTip.text: Backend.statusMessage
                     ToolTip.delay: 350
                 }
 
@@ -552,7 +554,7 @@ ApplicationWindow {
                 }
                 ActionButton {
                     objectName: "exportButton"
-                    text: backend.exporting ? (Math.round(backend.exportProgress * 100) + "%") : "Export"
+                    text: Backend.exporting ? (Math.round(Backend.exportProgress * 100) + "%") : "Export"
                     highlighted: true
                     horizontalPadding: Design.s5
                     toolTipText: "Export video (Ctrl+E)"
@@ -576,6 +578,7 @@ ApplicationWindow {
 
             MediaBinPanel {
                 objectName: "mediaBinPanel"
+                onImportRequested: importDialog.open()
                 SplitView.preferredWidth: 260
                 SplitView.minimumWidth: 210
                 SplitView.maximumWidth: 380
@@ -590,6 +593,7 @@ ApplicationWindow {
 
             PreviewPanel {
                 objectName: "previewPanel"
+                onImportRequested: importDialog.open()
                 SplitView.fillWidth: true
                 SplitView.minimumWidth: 400
             }
@@ -602,6 +606,8 @@ ApplicationWindow {
 
             InspectorPanel {
                 objectName: "inspectorPanel"
+                onSrtImportRequested: importSrtDialog.open()
+                onSrtExportRequested: exportSrtDialog.open()
                 SplitView.preferredWidth: 300
                 SplitView.minimumWidth: 250
                 SplitView.maximumWidth: 420

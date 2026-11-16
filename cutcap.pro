@@ -1,8 +1,14 @@
 QT += core gui qml quick quickcontrols2 multimedia concurrent dbus
 
 CONFIG += c++17 release
+CONFIG += qmltypes
+QML_IMPORT_NAME = CutCap
+QML_IMPORT_MAJOR_VERSION = 1
 TARGET = cutcap
 TEMPLATE = app
+
+# The generated QML type registration includes the headers as <name.h>.
+INCLUDEPATH += src
 
 HEADERS += \
     src/backend.h \

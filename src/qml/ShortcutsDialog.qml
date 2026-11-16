@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -14,7 +16,7 @@ Dialog {
     padding: Design.s5
     header: Item { implicitHeight: 0; visible: false }
 
-    Material.theme: theme.darkMode ? Material.Dark : Material.Light
+    Material.theme: Theme.darkMode ? Material.Dark : Material.Light
     Material.accent: Design.accent
     Material.background: Design.surfaceOverlay
     Material.foreground: Design.textPrimary
@@ -78,6 +80,8 @@ Dialog {
                         ["Ctrl+Q", "Quit CutCap"]
                     ]
                     delegate: RowLayout {
+                        id: delegateRoot1
+                        required property var modelData
                         Layout.fillWidth: true
                         spacing: Design.s4
                         Rectangle {
@@ -89,14 +93,14 @@ Dialog {
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData[0]
+                                text: delegateRoot1.modelData[0]
                                 color: Design.accent
                                 font.family: "monospace"
                                 font.pixelSize: Design.tCaption
                             }
                         }
                         Text {
-                            text: modelData[1]
+                            text: delegateRoot1.modelData[1]
                             color: Design.textPrimary
                             font.pixelSize: Design.tBody
                             Layout.fillWidth: true

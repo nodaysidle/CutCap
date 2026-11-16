@@ -1,7 +1,13 @@
 #include "design.h"
 
+#include <QQmlEngine>
 #include <algorithm>
 #include <cmath>
+
+Design *Design::create(QQmlEngine *engine, QJSEngine *) {
+    auto *theme = engine->singletonInstance<Theme *>(QStringLiteral("CutCap"), QStringLiteral("Theme"));
+    return theme ? new Design(*theme, engine) : nullptr;
+}
 
 Design::Design(Theme &theme, QObject *parent) : QObject(parent), m_theme(theme) {
     connect(&theme, &Theme::changed, this, &Design::changed);

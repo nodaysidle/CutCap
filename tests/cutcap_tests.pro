@@ -2,6 +2,9 @@ QT += core gui qml quick quickcontrols2 multimedia concurrent dbus testlib
 
 CONFIG += c++17 console
 CONFIG -= app_bundle
+CONFIG += qmltypes
+QML_IMPORT_NAME = CutCap
+QML_IMPORT_MAJOR_VERSION = 1
 TARGET = cutcap_tests
 TEMPLATE = app
 

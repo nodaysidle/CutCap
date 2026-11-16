@@ -6,6 +6,7 @@
 #include <QQuickItem>
 #include <QVideoFrame>
 #include <QVideoSink>
+#include <QtQml/qqmlregistration.h>
 
 // Clip effects applied with the same math as the FFmpeg filters used on export
 // (eq -> boxblur -> vignette -> chromakey, in that order, on Y'CbCr values),
@@ -28,6 +29,7 @@ struct ClipLook {
 
 class ClipFrameItem : public QQuickItem {
     Q_OBJECT
+    QML_ELEMENT
     Q_PROPERTY(QVideoSink *videoSink READ videoSink CONSTANT)
     Q_PROPERTY(QString imageSource READ imageSource WRITE setImageSource NOTIFY imageSourceChanged)
     Q_PROPERTY(double brightness MEMBER m_brightness WRITE setBrightness NOTIFY lookChanged)
@@ -63,7 +65,6 @@ public:
     void setBlend(double v);
 
     static QImage process(const QImage &source, const ClipLook &look);
-    static void registerQmlType();
 
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;

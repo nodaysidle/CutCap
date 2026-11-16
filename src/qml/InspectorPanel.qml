@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import CutCap
 import QtQuick.Controls
@@ -6,14 +8,17 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
+
+    signal srtImportRequested()
+    signal srtExportRequested()
     color: Design.surfacePanel
     clip: true
 
-    readonly property var selClip: backend.selectedClip
-    readonly property var selText: backend.selectedText
-    readonly property bool hasClip: backend.selectedClipId.length > 0 && selClip.id !== undefined
-    readonly property bool hasText: backend.selectedTextId.length > 0 && selText.id !== undefined
-    readonly property var selXf: backend.selectedClipTransform
+    readonly property var selClip: Backend.selectedClip
+    readonly property var selText: Backend.selectedText
+    readonly property bool hasClip: Backend.selectedClipId.length > 0 && root.selClip.id !== undefined
+    readonly property bool hasText: Backend.selectedTextId.length > 0 && root.selText.id !== undefined
+    readonly property var selXf: Backend.selectedClipTransform
 
     // Section label: small, secondary, sentence case, above a hairline rule. No shouting.
     component SectionLabel: Text {
@@ -232,7 +237,7 @@ Rectangle {
                 anchors.rightMargin: Design.s3
                 spacing: Design.s2
                 Text {
-                    text: hasText ? "Text" : (hasClip ? selClip.name : "Inspector")
+                    text: root.hasText ? "Text" : (root.hasClip ? root.selClip.name : "Inspector")
                     color: Design.textPrimary
                     font.weight: Design.wSemibold
                     font.pixelSize: Design.tBodyLg
@@ -240,17 +245,17 @@ Rectangle {
                     Layout.fillWidth: true
                 }
                 Text {
-                    visible: backend.selectedClipCount > 1
-                    text: backend.selectedClipCount + " selected"
+                    visible: Backend.selectedClipCount > 1
+                    text: Backend.selectedClipCount + " selected"
                     color: Design.textSecondary
                     font.pixelSize: Design.tCaption
                 }
                 ActionButton {
                     text: "Delete"
-                    visible: hasClip || hasText
+                    visible: root.hasClip || root.hasText
                     flat: true
                     textColor: Design.danger
-                    onClicked: backend.deleteSelected(false)
+                    onClicked: Backend.deleteSelected(false)
                 }
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.borderHairline }
@@ -260,7 +265,7 @@ Rectangle {
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: !hasClip && !hasText
+            visible: !root.hasClip && !root.hasText
             Text {
                 anchors.centerIn: parent
                 width: parent.width - Design.s6 * 2
@@ -277,7 +282,7 @@ Rectangle {
             id: textScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: hasText
+            visible: root.hasText
             clip: true
             contentWidth: availableWidth
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -294,7 +299,7 @@ Rectangle {
                 TextArea {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-                    text: hasText ? selText.text : ""
+                    text: root.hasText ? root.selText.text : ""
                     wrapMode: Text.WordWrap
                     font.pixelSize: Design.tBody
                     color: Design.textPrimary
@@ -304,41 +309,41 @@ Rectangle {
                         border.color: Design.borderHairline
                     }
                     onTextChanged: {
-                        if (hasText && activeFocus && text !== selText.text)
-                            backend.updateTextProperty(selText.id, "text", text)
+                        if (root.hasText && activeFocus && text !== root.selText.text)
+                            Backend.updateTextProperty(root.selText.id, "text", text)
                     }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "Font Size: " + (hasText ? selText.fontSize : 44); color: Design.textSecondary; font.pixelSize: Design.tCaption }
+                    Text { text: "Font Size: " + (root.hasText ? root.selText.fontSize : 44); color: Design.textSecondary; font.pixelSize: Design.tCaption }
                     Item { Layout.fillWidth: true }
                     CheckBox {
                         text: "Bold"
-                        checked: hasText ? selText.bold : true
+                        checked: root.hasText ? root.selText.bold : true
                         font.pixelSize: Design.tCaption
-                        onToggled: backend.updateTextProperty(selText.id, "bold", checked)
+                        onToggled: Backend.updateTextProperty(root.selText.id, "bold", checked)
                     }
                 }
                 CompactSlider {
                     Layout.fillWidth: true
                     from: 18; to: 110; stepSize: 2
-                    value: hasText ? selText.fontSize : 44
-                    onMoved: backend.updateTextProperty(selText.id, "fontSize", Math.round(value))
+                    value: root.hasText ? root.selText.fontSize : 44
+                    onMoved: Backend.updateTextProperty(root.selText.id, "fontSize", Math.round(value))
                 }
 
                 ValueRow {
                     label: "Duration (s)"
-                    value: hasText ? selText.durationSec : 3.0
+                    value: root.hasText ? root.selText.durationSec : 3.0
                     from: 0.5; to: 20.0; step: 0.1; defaultValue: 3.0; decimals: 1
-                    onEdited: (v) => backend.updateTextProperty(selText.id, "durationSec", v)
+                    onEdited: (v) => Backend.updateTextProperty(root.selText.id, "durationSec", v)
                 }
 
                 ValueRow {
                     label: "Box Opacity"
-                    value: hasText ? selText.bgOpacity : 0.65
+                    value: root.hasText ? root.selText.bgOpacity : 0.65
                     from: 0.0; to: 1.0; step: 0.05; defaultValue: 0.65; decimals: 2
-                    onEdited: (v) => backend.updateTextProperty(selText.id, "bgOpacity", v)
+                    onEdited: (v) => Backend.updateTextProperty(root.selText.id, "bgOpacity", v)
                 }
 
                 Text { text: "Text Color"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
@@ -347,14 +352,16 @@ Rectangle {
                     Repeater {
                         model: ["#eceff4", Design.warning, Design.info, Design.success, Design.danger, Design.laneV2]
                         delegate: Rectangle {
+                            id: delegateRoot1
+                            required property var modelData
                             width: 24; height: 24; radius: width / 2
-                            color: modelData
-                            border.color: (hasText && selText.color === modelData) ? Design.accent : Design.borderHairline
+                            color: delegateRoot1.modelData
+                            border.color: (root.hasText && root.selText.color === delegateRoot1.modelData) ? Design.accent : Design.borderHairline
                             border.width: 2
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: backend.updateTextProperty(selText.id, "color", modelData)
+                                onClicked: Backend.updateTextProperty(root.selText.id, "color", delegateRoot1.modelData)
                             }
                         }
                     }
@@ -370,7 +377,7 @@ Rectangle {
             objectName: "clipInspectorScroll"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: hasClip
+            visible: root.hasClip
             clip: true
             contentWidth: availableWidth
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -397,20 +404,20 @@ Rectangle {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: hasClip && selClip.kind !== "audio" && selClip.track !== 2
+                        visible: root.hasClip && root.selClip.kind !== "audio" && root.selClip.track !== 2
                         Text { text: "Track"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
                         Item { Layout.fillWidth: true }
                         ActionButton {
-                            text: selClip.track === 0 ? "V1 Main → V2" : "V2 Overlay → V1"
-                            onClicked: backend.moveClip(selClip.id, selClip.timelineStartSec, selClip.track === 0 ? 1 : 0)
+                            text: root.selClip.track === 0 ? "V1 Main → V2" : "V2 Overlay → V1"
+                            onClicked: Backend.moveClip(root.selClip.id, root.selClip.timelineStartSec, root.selClip.track === 0 ? 1 : 0)
                         }
                     }
 
                     ValueRow {
                         label: "Speed ×"
-                        value: hasClip ? selClip.speed : 1.0
+                        value: root.hasClip ? root.selClip.speed : 1.0
                         from: 0.25; to: 4.0; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "speed", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "speed", v)
                     }
 
                     Text { text: "Transition In"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
@@ -427,8 +434,8 @@ Rectangle {
                             { text: "Slide left", value: "slideleft" },
                             { text: "Slide right", value: "slideright" }
                         ]
-                        currentIndex: hasClip ? Math.max(0, indexOfValue(selClip.transitionIn)) : 0
-                        onActivated: backend.updateClipProperty(selClip.id, "transitionIn", currentValue)
+                        currentIndex: root.hasClip ? Math.max(0, indexOfValue(root.selClip.transitionIn)) : 0
+                        onActivated: Backend.updateClipProperty(root.selClip.id, "transitionIn", currentValue)
                     }
                 }
 
@@ -442,7 +449,7 @@ Rectangle {
                         flat: true
                         horizontalPadding: Design.s2
                         toolTipText: "Reset brightness, contrast, saturation, blur and vignette"
-                        onClicked: backend.applyLookPreset(selClip.id, "neutral")
+                        onClicked: Backend.applyLookPreset(root.selClip.id, "neutral")
                     }
 
                     Flow {
@@ -451,48 +458,50 @@ Rectangle {
                         Repeater {
                             model: ["Neutral", "Punch", "Mono", "Warm", "Soft"]
                             delegate: ActionButton {
-                                text: modelData
+                                id: delegateRoot2
+                                required property var modelData
+                                text: delegateRoot2.modelData
                                 flat: true
                                 horizontalPadding: Design.s2
-                                toolTipText: "Apply the " + modelData + " look"
-                                onClicked: backend.applyLookPreset(selClip.id, modelData.toLowerCase())
+                                toolTipText: "Apply the " + delegateRoot2.modelData + " look"
+                                onClicked: Backend.applyLookPreset(root.selClip.id, delegateRoot2.modelData.toLowerCase())
                             }
                         }
                     }
 
                     ValueRow {
                         label: "Brightness"
-                        value: hasClip ? selClip.brightness : 0.0
+                        value: root.hasClip ? root.selClip.brightness : 0.0
                         from: -0.5; to: 0.5; step: 0.02; defaultValue: 0.0; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "brightness", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "brightness", v)
                     }
 
                     ValueRow {
                         label: "Contrast"
-                        value: hasClip ? selClip.contrast : 1.0
+                        value: root.hasClip ? root.selClip.contrast : 1.0
                         from: 0.5; to: 2.0; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "contrast", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "contrast", v)
                     }
 
                     ValueRow {
                         label: "Saturation"
-                        value: hasClip ? selClip.saturation : 1.0
+                        value: root.hasClip ? root.selClip.saturation : 1.0
                         from: 0.0; to: 2.0; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "saturation", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "saturation", v)
                     }
 
                     ValueRow {
                         label: "Blur"
-                        value: hasClip ? selClip.blur : 0.0
+                        value: root.hasClip ? root.selClip.blur : 0.0
                         from: 0.0; to: 20.0; step: 0.5; defaultValue: 0.0; decimals: 1
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "blur", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "blur", v)
                     }
 
                     CheckBox {
                         text: "Vignette"
-                        checked: hasClip ? selClip.vignette : false
+                        checked: root.hasClip ? root.selClip.vignette : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "vignette", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "vignette", checked)
                     }
                 }
 
@@ -504,50 +513,52 @@ Rectangle {
                         text: "+ Keyframe"
                         flat: true
                         horizontalPadding: Design.s2
-                        onClicked: backend.addKeyframeAtPlayhead(selClip.id)
+                        onClicked: Backend.addKeyframeAtPlayhead(root.selClip.id)
                     }
 
                     ValueRow {
                         label: "Position X"
-                        value: selXf.x
+                        value: root.selXf.x
                         from: 0.0; to: 1.0; step: 0.01; defaultValue: 0.5; decimals: 2
-                        onEdited: (v) => backend.updateTransformAtPlayhead(selClip.id, v, selXf.y, selXf.scale, selXf.opacity, selXf.rotation)
+                        onEdited: (v) => Backend.updateTransformAtPlayhead(root.selClip.id, v, root.selXf.y, root.selXf.scale, root.selXf.opacity, root.selXf.rotation)
                     }
 
                     ValueRow {
                         label: "Position Y"
-                        value: selXf.y
+                        value: root.selXf.y
                         from: 0.0; to: 1.0; step: 0.01; defaultValue: 0.5; decimals: 2
-                        onEdited: (v) => backend.updateTransformAtPlayhead(selClip.id, selXf.x, v, selXf.scale, selXf.opacity, selXf.rotation)
+                        onEdited: (v) => Backend.updateTransformAtPlayhead(root.selClip.id, root.selXf.x, v, root.selXf.scale, root.selXf.opacity, root.selXf.rotation)
                     }
 
                     ValueRow {
                         label: "Scale"
-                        value: selXf.scale
+                        value: root.selXf.scale
                         from: 0.2; to: 2.5; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateTransformAtPlayhead(selClip.id, selXf.x, selXf.y, v, selXf.opacity, selXf.rotation)
+                        onEdited: (v) => Backend.updateTransformAtPlayhead(root.selClip.id, root.selXf.x, root.selXf.y, v, root.selXf.opacity, root.selXf.rotation)
                     }
 
                     ValueRow {
                         label: "Opacity"
-                        value: selXf.opacity
+                        value: root.selXf.opacity
                         from: 0.0; to: 1.0; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateTransformAtPlayhead(selClip.id, selXf.x, selXf.y, selXf.scale, v, selXf.rotation)
+                        onEdited: (v) => Backend.updateTransformAtPlayhead(root.selClip.id, root.selXf.x, root.selXf.y, root.selXf.scale, v, root.selXf.rotation)
                     }
 
                     ValueRow {
                         label: "Rotation (°)"
-                        value: selXf.rotation
+                        value: root.selXf.rotation
                         from: -180; to: 180; step: 1; defaultValue: 0.0; decimals: 0
-                        onEdited: (v) => backend.updateTransformAtPlayhead(selClip.id, selXf.x, selXf.y, selXf.scale, selXf.opacity, v)
+                        onEdited: (v) => Backend.updateTransformAtPlayhead(root.selClip.id, root.selXf.x, root.selXf.y, root.selXf.scale, root.selXf.opacity, v)
                     }
 
                     Repeater {
-                        model: hasClip ? selClip.keyframes : []
+                        model: root.hasClip ? root.selClip.keyframes : []
                         delegate: RowLayout {
+                            id: delegateRoot3
+                            required property var modelData
                             Layout.fillWidth: true
                             Text {
-                                text: "◆ " + Number(modelData.timeSec).toFixed(2) + "s  scale=" + Number(modelData.scale).toFixed(2)
+                                text: "◆ " + Number(delegateRoot3.modelData.timeSec).toFixed(2) + "s  scale=" + Number(delegateRoot3.modelData.scale).toFixed(2)
                                 color: Design.warning
                                 font.pixelSize: Design.tCaption
                                 Layout.fillWidth: true
@@ -560,7 +571,7 @@ Rectangle {
                                 fontPixelSize: Design.tBodyLg
                                 textColor: Design.danger
                                 toolTipText: "Remove keyframe"
-                                onClicked: backend.removeKeyframe(selClip.id, modelData.timeSec)
+                                onClicked: Backend.removeKeyframe(root.selClip.id, delegateRoot3.modelData.timeSec)
                             }
                         }
                     }
@@ -569,47 +580,47 @@ Rectangle {
                 CollapsibleSection {
                     objectName: "sectionAudio"
                     title: "Audio & Cleanup"
-                    expanded: hasClip && selClip.kind === "audio"
+                    expanded: root.hasClip && root.selClip.kind === "audio"
 
                     ValueRow {
                         label: "Volume"
-                        value: hasClip ? selClip.volume : 1.0
+                        value: root.hasClip ? root.selClip.volume : 1.0
                         from: 0.0; to: 2.0; step: 0.05; defaultValue: 1.0; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "volume", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "volume", v)
                     }
 
                     CheckBox {
                         text: "Mute Clip Audio"
-                        checked: hasClip ? selClip.muted : false
+                        checked: root.hasClip ? root.selClip.muted : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "muted", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "muted", checked)
                     }
 
                     SectionLabel { text: "Offline Audio Cleanup (FFmpeg DSP)" }
 
                     CheckBox {
                         text: "Denoise (afftdn)"
-                        checked: hasClip ? selClip.audioDenoise : false
+                        checked: root.hasClip ? root.selClip.audioDenoise : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "audioDenoise", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "audioDenoise", checked)
                     }
                     CheckBox {
                         text: "Voice Clarity (High-pass + EQ)"
-                        checked: hasClip ? selClip.audioVoiceClarity : false
+                        checked: root.hasClip ? root.selClip.audioVoiceClarity : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "audioVoiceClarity", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "audioVoiceClarity", checked)
                     }
                     CheckBox {
                         text: "Compressor (Even Speech)"
-                        checked: hasClip ? selClip.audioCompress : false
+                        checked: root.hasClip ? root.selClip.audioCompress : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "audioCompress", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "audioCompress", checked)
                     }
                     CheckBox {
                         text: "Loudness Normalize (-14 LUFS)"
-                        checked: hasClip ? selClip.audioNormalize : false
+                        checked: root.hasClip ? root.selClip.audioNormalize : false
                         font.pixelSize: Design.tBody
-                        onToggled: backend.updateClipProperty(selClip.id, "audioNormalize", checked)
+                        onToggled: Backend.updateClipProperty(root.selClip.id, "audioNormalize", checked)
                     }
                 }
 
@@ -628,22 +639,22 @@ Rectangle {
                             { text: "Chroma key", value: "chromakey" },
                             { text: "AI cutout (rembg)", value: "ai_rembg" }
                         ]
-                        currentIndex: hasClip ? Math.max(0, indexOfValue(selClip.bgRemovalMode)) : 0
-                        onActivated: backend.updateClipProperty(selClip.id, "bgRemovalMode", currentValue)
+                        currentIndex: root.hasClip ? Math.max(0, indexOfValue(root.selClip.bgRemovalMode)) : 0
+                        onActivated: Backend.updateClipProperty(root.selClip.id, "bgRemovalMode", currentValue)
                     }
 
                     ValueRow {
                         label: "Chroma Similarity"
-                        value: hasClip ? selClip.chromaSimilarity : 0.18
+                        value: root.hasClip ? root.selClip.chromaSimilarity : 0.18
                         from: 0.02; to: 0.5; step: 0.01; defaultValue: 0.18; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "chromaSimilarity", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "chromaSimilarity", v)
                     }
 
                     ValueRow {
                         label: "Chroma Blend"
-                        value: hasClip ? selClip.chromaBlend : 0.08
+                        value: root.hasClip ? root.selClip.chromaBlend : 0.08
                         from: 0.0; to: 0.4; step: 0.01; defaultValue: 0.08; decimals: 2
-                        onEdited: (v) => backend.updateClipProperty(selClip.id, "chromaBlend", v)
+                        onEdited: (v) => Backend.updateClipProperty(root.selClip.id, "chromaBlend", v)
                     }
 
                     RowLayout {
@@ -657,21 +668,22 @@ Rectangle {
                                 { value: "#eceff4", name: "White" }
                             ]
                             delegate: Item {
+                                required property var modelData
                                 id: swatch
                                 width: 24
                                 height: 24
                                 activeFocusOnTab: true
                                 Accessible.role: Accessible.RadioButton
-                                Accessible.name: modelData.name + " key colour"
-                                Accessible.checked: hasClip && selClip.chromaColor === modelData.value
-                                Accessible.onPressAction: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                Accessible.name: swatch.modelData.name + " key colour"
+                                Accessible.checked: root.hasClip && root.selClip.chromaColor === swatch.modelData.value
+                                Accessible.onPressAction: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
                                 Rectangle {
                                     anchors.centerIn: parent
                                     width: 20
                                     height: 20
                                     radius: Design.rXs
-                                    color: modelData.value
-                                    border.color: (hasClip && selClip.chromaColor === modelData.value) ? Design.accent : Design.borderHairline
+                                    color: swatch.modelData.value
+                                    border.color: (root.hasClip && root.selClip.chromaColor === swatch.modelData.value) ? Design.accent : Design.borderHairline
                                     border.width: 2
                                 }
                                 Rectangle {
@@ -686,11 +698,11 @@ Rectangle {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         swatch.forceActiveFocus()
-                                        backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                        Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
                                     }
                                 }
-                                Keys.onSpacePressed: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
-                                Keys.onReturnPressed: backend.updateClipProperty(selClip.id, "chromaColor", modelData.value)
+                                Keys.onSpacePressed: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
+                                Keys.onReturnPressed: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
                             }
                         }
                     }
@@ -699,27 +711,27 @@ Rectangle {
                         text: "Run Local AI Remove BG (rembg)"
                         Layout.fillWidth: true
                         fontPixelSize: Design.tBody
-                        enabled: backend.capabilities.rembg !== "" && selClip.kind === "image" && !backend.busy
-                        toolTipText: backend.capabilities.rembg === ""
+                        enabled: Backend.capabilities.rembg !== "" && root.selClip.kind === "image" && !Backend.busy
+                        toolTipText: Backend.capabilities.rembg === ""
                                      ? "Install rembg (uv tool install rembg[cli]) for local AI cutout; Chroma Key works without it"
-                                     : (selClip.kind !== "image"
+                                     : (root.selClip.kind !== "image"
                                         ? "AI cutout works on image clips; Chroma Key removes a colour from video"
                                         : "Remove this image's background locally")
-                        onClicked: backend.applyAiBackgroundRemoval(selClip.id)
+                        onClicked: Backend.applyAiBackgroundRemoval(root.selClip.id)
                     }
                     Text {
-                        visible: backend.busy
-                        text: backend.statusMessage
+                        visible: Backend.busy
+                        text: Backend.statusMessage
                         color: Design.textSecondary
                         font.pixelSize: Design.tCaption
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: backend.capabilities.rembg
+                        text: Backend.capabilities.rembg
                               ? "rembg detected locally"
                               : "Chroma Key works built-in; install rembg for AI cutout"
-                        color: backend.capabilities.rembg ? Design.success : Design.textSecondary
+                        color: Backend.capabilities.rembg ? Design.success : Design.textSecondary
                         font.pixelSize: Design.tCaption
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -759,16 +771,16 @@ Rectangle {
                         ActionButton {
                             text: "Auto captions"
                             Layout.fillWidth: true
-                            enabled: backend.capabilities.whisper !== "" && !backend.busy
-                            toolTipText: backend.capabilities.whisper !== ""
-                                         ? "Transcribe this clip offline with " + backend.capabilities.whisper
+                            enabled: Backend.capabilities.whisper !== "" && !Backend.busy
+                            toolTipText: Backend.capabilities.whisper !== ""
+                                         ? "Transcribe this clip offline with " + Backend.capabilities.whisper
                                          : "Install whisper.cpp or faster-whisper for offline captions"
-                            onClicked: backend.generateAutoCaptions(selClip.id, captionLang.text)
+                            onClicked: Backend.generateAutoCaptions(root.selClip.id, captionLang.text)
                         }
                     }
                     Text {
-                        visible: backend.busy
-                        text: backend.statusMessage
+                        visible: Backend.busy
+                        text: Backend.statusMessage
                         color: Design.textSecondary
                         font.pixelSize: Design.tCaption
                         wrapMode: Text.WordWrap
@@ -777,20 +789,20 @@ Rectangle {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Design.s1
-                        ActionButton { text: "Import .srt"; Layout.fillWidth: true; onClicked: importSrtDialog.open() }
-                        ActionButton { text: "Export .srt"; Layout.fillWidth: true; onClicked: exportSrtDialog.open() }
+                        ActionButton { text: "Import .srt"; Layout.fillWidth: true; onClicked: root.srtImportRequested() }
+                        ActionButton { text: "Export .srt"; Layout.fillWidth: true; onClicked: root.srtExportRequested() }
                     }
 
                     ActionButton {
-                        text: backend.recordingVoiceover ? "Stop recording" : "Record voiceover"
+                        text: Backend.recordingVoiceover ? "Stop recording" : "Record voiceover"
                         Layout.fillWidth: true
-                        fillColor: backend.recordingVoiceover ? Design.danger : Design.surfaceRaised
-                        textColor: backend.recordingVoiceover ? Design.onAccent : Design.textPrimary
-                        enabled: backend.recordingVoiceover || backend.capabilities.pwRecord
-                        toolTipText: backend.recordingVoiceover || backend.capabilities.pwRecord
+                        fillColor: Backend.recordingVoiceover ? Design.danger : Design.surfaceRaised
+                        textColor: Backend.recordingVoiceover ? Design.onAccent : Design.textPrimary
+                        enabled: Backend.recordingVoiceover || Backend.capabilities.pwRecord
+                        toolTipText: Backend.recordingVoiceover || Backend.capabilities.pwRecord
                                      ? "Record a voiceover onto the audio lane"
                                      : "Install pipewire (pw-record) or pulseaudio-utils (parec) to record"
-                        onClicked: backend.toggleVoiceoverRecording()
+                        onClicked: Backend.toggleVoiceoverRecording()
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -819,11 +831,11 @@ Rectangle {
                         }
                         ActionButton {
                             text: "Speak"
-                            enabled: ttsField.text.length > 0 && backend.capabilities.tts !== "" && !backend.busy
-                            toolTipText: backend.capabilities.tts === ""
+                            enabled: ttsField.text.length > 0 && Backend.capabilities.tts !== "" && !Backend.busy
+                            toolTipText: Backend.capabilities.tts === ""
                                          ? "Install piper-tts or espeak-ng for offline speech"
                                          : "Generate a voice clip with the local TTS engine"
-                            onClicked: backend.generateLocalTts(ttsField.text)
+                            onClicked: Backend.generateLocalTts(ttsField.text)
                         }
                     }
                 }
