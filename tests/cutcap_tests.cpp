@@ -1733,6 +1733,60 @@ private slots:
         QCOMPARE(c.keyframes[0].opacity, 1.0);
     }
 
+    // A literal backslash typed in a title must not turn into an ASS control code on export.
+    void testAssEscapesBackslash() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Project p;
+        TextOverlay t;
+        t.text = "C:\\new folder";
+        t.startSec = 0.0;
+        t.durationSec = 2.0;
+        p.texts.append(t);
+
+        const QString ass = MediaEngine::generateAssSubtitles(p, dir.path() + "/subs.ass", 1920, 1080);
+        QVERIFY(!ass.isEmpty());
+        QFile f(ass);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QString content = QString::fromUtf8(f.readAll());
+        QString dialogue;
+        for (const QString &line : content.split('\n')) {
+            if (line.startsWith("Dialogue:"))
+                dialogue = line;
+        }
+        QVERIFY2(!dialogue.isEmpty(), "no dialogue line was written");
+        QVERIFY2(dialogue.contains("C:\\\\new folder"), qPrintable(dialogue));
+        QVERIFY2(!dialogue.contains("C:\\new folder"), qPrintable(dialogue));
+    }
+
+    // Old cache entries go, recent ones and explicitly kept ones stay.
+    void testCachePrune() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString old = dir.path() + "/tts_old.wav";
+        const QString recent = dir.path() + "/tts_recent.wav";
+        const QString kept = dir.path() + "/thumb_keep.jpg";
+        for (const QString &path : {old, recent, kept}) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("x");
+        }
+        const QDateTime monthAgo = QDateTime::currentDateTime().addDays(-30);
+        QFile oldFile(old);
+        QVERIFY(oldFile.open(QIODevice::ReadWrite));
+        QVERIFY(oldFile.setFileTime(monthAgo, QFileDevice::FileModificationTime));
+        oldFile.close();
+        QFile keptFile(kept);
+        QVERIFY(keptFile.open(QIODevice::ReadWrite));
+        QVERIFY(keptFile.setFileTime(monthAgo, QFileDevice::FileModificationTime));
+        keptFile.close();
+
+        QCOMPARE(MediaEngine::pruneCache(dir.path(), 7, {kept}), 1);
+        QVERIFY(!QFileInfo::exists(old));
+        QVERIFY(QFileInfo::exists(recent));
+        QVERIFY(QFileInfo::exists(kept));
+    }
+
     void splitAtPlayheadSplitsWholeSelection() {
         QTemporaryDir dir;
         const QString vid = makeSampleVideo(dir.path(), "split.mp4", "white", 3.0);

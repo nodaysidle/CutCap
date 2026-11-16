@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -95,6 +96,21 @@ QString MediaEngine::cacheDir() {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     QDir().mkpath(dir);
     return dir;
+}
+
+int MediaEngine::pruneCache(const QString &dir, int maxAgeDays, const QStringList &keepPaths) {
+    if (dir.isEmpty() || maxAgeDays <= 0)
+        return 0;
+    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-maxAgeDays);
+    int removed = 0;
+    const QFileInfoList entries = QDir(dir).entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : entries) {
+        if (keepPaths.contains(entry.absoluteFilePath()) || entry.lastModified() >= cutoff)
+            continue;
+        if (QFile::remove(entry.absoluteFilePath()))
+            ++removed;
+    }
+    return removed;
 }
 
 static QString hashForPath(const QString &path) {
@@ -299,6 +315,7 @@ QString MediaEngine::generateAssSubtitles(const Project &project, const QString 
         const QString primary = toAssColor(t.color, 1.0);
         const QString back = toAssColor(t.bgColor, t.bgOpacity);
         QString escaped = t.text;
+        escaped.replace("\\", "\\\\");
         escaped.replace("\n", "\\N");
         escaped.replace("{", "\\{").replace("}", "\\}");
 

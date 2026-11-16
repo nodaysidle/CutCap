@@ -34,6 +34,8 @@ public:
 
     static Capabilities detectCapabilities();
     static QString cacheDir();
+    // Deletes cache files older than maxAgeDays, except the paths in keepPaths. Returns the count.
+    static int pruneCache(const QString &dir, int maxAgeDays = 7, const QStringList &keepPaths = {});
 
     static MediaAsset probeMedia(const QString &path, QString *error = nullptr);
     static QString ensureThumbnail(const MediaAsset &asset);

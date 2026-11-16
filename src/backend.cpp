@@ -61,6 +61,10 @@ Backend::Backend(QObject *parent) : QObject(parent) {
 
     refreshCapabilities();
 
+    // Thumbnails, filmstrips, voiceovers and TTS clips pile up in the cache; sweep them once at
+    // start, off the GUI thread. Preview files for a project are regenerated if they are gone.
+    (void)QtConcurrent::run([] { MediaEngine::pruneCache(MediaEngine::cacheDir()); });
+
     connect(&m_exportProcess, &QProcess::readyReadStandardError, this, [this] {
         const QString chunk = QString::fromUtf8(m_exportProcess.readAllStandardError());
         m_exportStderrTail = (m_exportStderrTail + chunk).right(2048);
@@ -1434,8 +1438,14 @@ void Backend::toggleVoiceoverRecording() {
     }
     m_voiceoverStartSec = m_playheadSec;
     m_voiceoverPath = MediaEngine::cacheDir() + QString("/vo_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
-    const QString cmd = !QStandardPaths::findExecutable("pw-record").isEmpty() ? "pw-record" : "parec";
-    m_voiceoverProcess.start(cmd, {m_voiceoverPath});
+    const bool hasPwRecord = !QStandardPaths::findExecutable("pw-record").isEmpty();
+    const QString cmd = hasPwRecord ? "pw-record" : "parec";
+    QStringList args;
+    // parec writes raw PCM unless told otherwise, which leaves the .wav without a header.
+    if (!hasPwRecord)
+        args << "--file-format=wav";
+    args << m_voiceoverPath;
+    m_voiceoverProcess.start(cmd, args);
     emit voiceoverStateChanged();
     setStatus("Recording voiceover... click again to stop");
 }
