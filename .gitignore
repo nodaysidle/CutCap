@@ -1,2 +1,8 @@
 # qmake build output (shadow builds go elsewhere when BUILD_DIR is set)
 build/
+# makepkg
+pkgbuild/src/
+pkgbuild/pkg/
+pkgbuild/*.pkg.tar.zst
+# tool caches
+.optim-jev/
