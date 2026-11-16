@@ -39,15 +39,32 @@ Theme::Theme(const QString &directory, QObject *parent, const QString &hyprctl)
             emit changed();
         }
     });
-    m_roundingPoll.setInterval(1500);
-    connect(&m_roundingPoll, &QTimer::timeout, this, &Theme::refreshRounding);
-    if (!m_hyprctl.isEmpty())
-        m_roundingPoll.start();
+    if (!m_hyprctl.isEmpty()) {
+        const QString signature = qEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE");
+        const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
+        if (!signature.isEmpty() && !runtime.isEmpty()) {
+            const QString socketPath = QString("%1/hypr/%2/.socket2.sock").arg(runtime, signature);
+            connect(&m_hyprSocket, &QLocalSocket::readyRead, this, [this] {
+                if (QString::fromUtf8(m_hyprSocket.readAll()).contains("configreloaded"))
+                    refreshRounding();
+            });
+            connect(&m_hyprSocket, &QLocalSocket::connected, this, [this] { m_hyprReconnect.stop(); });
+            connect(&m_hyprSocket, &QLocalSocket::disconnected, this, [this] { m_hyprReconnect.start(); });
+            connect(&m_hyprSocket, &QLocalSocket::errorOccurred, this, [this] { m_hyprReconnect.start(); });
+            m_hyprReconnect.setInterval(30000);
+            connect(&m_hyprReconnect, &QTimer::timeout, this, [this, socketPath] {
+                if (m_hyprSocket.state() == QLocalSocket::UnconnectedState)
+                    m_hyprSocket.connectToServer(socketPath);
+            });
+            m_hyprSocket.connectToServer(socketPath);
+        }
+    }
 
     reload();
 }
 
 Theme::~Theme() {
+    m_hyprSocket.abort();
     if (m_roundingProcess.state() != QProcess::NotRunning) {
         m_roundingProcess.kill();
         m_roundingProcess.waitForFinished(1000);

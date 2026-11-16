@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QFileSystemWatcher>
+#include <QLocalSocket>
 #include <QObject>
 #include <QProcess>
 #include <QTimer>
@@ -93,6 +94,8 @@ private:
     QString m_hyprctl;
     int m_radius = 8;
     QProcess m_roundingProcess;
-    QTimer m_roundingPoll;
     QTimer m_roundingTimeout;
+    // Hyprland event socket (socket2): config reloads renew the rounding without polling hyprctl.
+    QLocalSocket m_hyprSocket;
+    QTimer m_hyprReconnect;
 };
