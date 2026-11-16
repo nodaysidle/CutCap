@@ -75,12 +75,14 @@ signals:
 
 private:
     void setSource(const QImage &image, bool bt709);
+    void setVideoFrame(const QVideoFrame &frame);
     void scheduleProcessing();
     ClipLook currentLook() const;
 
     QVideoSink *m_sink;
     QString m_imageSource;
     QImage m_source;
+    QVideoFrame m_sourceFrame; // decoded frame awaiting conversion, converted in the worker
     bool m_sourceBt709 = false;
     QImage m_output;
     bool m_textureDirty = false;

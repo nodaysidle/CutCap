@@ -784,31 +784,42 @@ Rectangle {
                 }
             }
 
-            // Audio: waveform of the trimmed source segment, scaled to the lane.
-            Row {
+            // Audio: waveform of the trimmed source segment. Only the visible slice is drawn, so a
+            // long clip at max zoom stays one item instead of one per three pixels.
+            Canvas {
                 id: wave
                 objectName: "clipWave"
                 readonly property var peaks: clipData.waveformPeaks || []
-                anchors.fill: parent
-                anchors.topMargin: 16
-                anchors.bottomMargin: 3
-                anchors.leftMargin: 2
-                spacing: 1
-                visible: !clipBox.visual && peaks.length > 0
-                Repeater {
-                    model: wave.visible ? Math.max(0, Math.floor((clipBox.width - 4) / 3)) : 0
-                    delegate: Item {
-                        width: 2
-                        height: wave.height
-                        readonly property int peakIndex: Math.max(0, Math.min(wave.peaks.length - 1,
-                            Math.floor(clipBox.sourceTimeAt(index * 3 + 1) / clipBox.sourceDuration * wave.peaks.length)))
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 2
-                            height: Math.max(2, wave.peaks[parent.peakIndex] * parent.height)
-                            radius: width / 2
-                            color: laneColor
-                        }
+                readonly property real viewLeft: timelineFlick.contentX - clipBox.x
+                readonly property real firstX: Math.max(2, viewLeft)
+                readonly property real lastX: Math.min(clipBox.width - 2, viewLeft + timelineFlick.width)
+                x: firstX
+                y: 16
+                width: Math.max(0, lastX - firstX)
+                height: clipBox.height - 19
+                visible: !clipBox.visual && peaks.length > 0 && width > 1
+                onVisibleChanged: if (visible) requestPaint()
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
+                onPeaksChanged: requestPaint()
+                Connections {
+                    target: timelineFlick
+                    function onContentXChanged() {
+                        if (wave.visible)
+                            wave.requestPaint()
+                    }
+                }
+                onPaint: {
+                    const ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+                    if (peaks.length === 0 || width <= 0 || height <= 0)
+                        return
+                    ctx.fillStyle = laneColor
+                    for (let px = 0; px < width; px += 3) {
+                        const frac = clipBox.sourceTimeAt(firstX + px + 1) / clipBox.sourceDuration
+                        const idx = Math.max(0, Math.min(peaks.length - 1, Math.floor(frac * peaks.length)))
+                        const h = Math.max(2, Math.min(height, peaks[idx] * height))
+                        ctx.fillRect(px, (height - h) / 2, 2, h)
                     }
                 }
             }

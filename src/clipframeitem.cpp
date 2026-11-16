@@ -166,7 +166,7 @@ ClipFrameItem::ClipFrameItem(QQuickItem *parent) : QQuickItem(parent), m_sink(ne
         // Frames queue up from the decoder thread; only the newest one is worth processing.
         if (!m_imageSource.isEmpty() || !frame.isValid() || frame != m_sink->videoFrame())
             return;
-        setSource(frame.toImage(), frame.surfaceFormat().colorSpace() == QVideoFrameFormat::ColorSpace_BT709);
+        setVideoFrame(frame);
     });
     connect(&m_watcher, &QFutureWatcher<QImage>::finished, this, [this] {
         const bool hadFrame = hasFrame();
@@ -220,8 +220,16 @@ CUTCAP_SETTER(setBlend, double, m_blend)
 #undef CUTCAP_SETTER
 
 void ClipFrameItem::setSource(const QImage &image, bool bt709) {
+    m_sourceFrame = QVideoFrame();
     m_source = image;
     m_sourceBt709 = bt709;
+    scheduleProcessing();
+}
+
+void ClipFrameItem::setVideoFrame(const QVideoFrame &frame) {
+    m_sourceFrame = frame;
+    m_source = QImage();
+    m_sourceBt709 = frame.surfaceFormat().colorSpace() == QVideoFrameFormat::ColorSpace_BT709;
     scheduleProcessing();
 }
 
@@ -244,7 +252,7 @@ void ClipFrameItem::scheduleProcessing() {
         m_dirtyWhileBusy = true;
         return;
     }
-    if (m_source.isNull()) {
+    if (m_source.isNull() && !m_sourceFrame.isValid()) {
         if (hasFrame()) {
             m_output = {};
             m_textureDirty = true;
@@ -257,13 +265,18 @@ void ClipFrameItem::scheduleProcessing() {
     const QSize target = (width() > 0 && height() > 0) ? QSize(int(std::ceil(width() * dpr)), int(std::ceil(height() * dpr)))
                                                       : QSize(1280, 1280);
     const QImage source = m_source;
+    const QVideoFrame frame = m_sourceFrame;
     ClipLook look = currentLook();
     const double blur = m_blur;
     const double referenceHeight = m_referenceHeight;
-    m_watcher.setFuture(QtConcurrent::run([source, target, look, blur, referenceHeight]() mutable {
-        const QImage scaled = (source.width() > target.width() || source.height() > target.height())
-                                  ? source.scaled(target, Qt::KeepAspectRatio, Qt::SmoothTransformation)
-                                  : source;
+    m_watcher.setFuture(QtConcurrent::run([source, frame, target, look, blur, referenceHeight]() mutable {
+        // Downloading and converting the frame is the expensive part; it belongs on this thread.
+        const QImage decoded = source.isNull() && frame.isValid() ? frame.toImage() : source;
+        if (decoded.isNull())
+            return QImage();
+        const QImage scaled = (decoded.width() > target.width() || decoded.height() > target.height())
+                                  ? decoded.scaled(target, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                                  : decoded;
         // Blur is given in export pixels for a clip `referenceHeight` tall; scale it to this image.
         look.blurRadius = referenceHeight > 0.0 ? blur * scaled.height() / referenceHeight : blur;
         return process(scaled, look);

@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 #include <QElapsedTimer>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QFile>
 #include <QRegularExpression>
@@ -923,9 +924,10 @@ private slots:
                                 .arg(expectedSec)));
 
         // Clip visuals are real: video clips tile filmstrip frames, audio clips draw the waveform.
-        auto firstVisible = [&](const QString &name) -> QQuickItem * {
+        auto firstVisible = [&](const QString &name, bool needsChildren = true) -> QQuickItem * {
             std::function<QQuickItem *(QQuickItem *)> walk = [&](QQuickItem *it) -> QQuickItem * {
-                if (it->objectName() == name && it->isVisible() && it->childItems().size() > 0)
+                if (it->objectName() == name && it->isVisible() &&
+                    (!needsChildren || it->childItems().size() > 0))
                     return it;
                 for (QQuickItem *child : it->childItems())
                     if (auto *found = walk(child))
@@ -946,8 +948,31 @@ private slots:
         backend.importSingleMedia(wav);
         waitForImports(backend);
         QTest::qWait(200);
-        auto *wave = firstVisible("clipWave");
+        // The waveform is drawn for the visible viewport, and the new clip starts at 0 s while the
+        // timeline is scrolled to 400 px, so scroll it into view before looking for it.
+        const qreal scrolledX = flick->property("contentX").toDouble();
+        flick->setProperty("contentX", 0.0);
+        QTest::qWait(150);
+        auto *wave = firstVisible("clipWave", false);
         QVERIFY2(wave, "audio clips must show a waveform");
+        QVERIFY2(wave->width() > 1.0 && wave->height() > 1.0,
+                 qPrintable(QString("waveform is %1x%2").arg(wave->width()).arg(wave->height())));
+        // A canvas that paints nothing would still exist and be sized, so check the pixels.
+        const QImage waveShot = window->grabWindow();
+        QVERIFY(!waveShot.isNull());
+        const qreal waveDpr = waveShot.devicePixelRatio();
+        const QPointF waveOrigin = wave->mapToScene(QPointF(0, 0));
+        // Sample the middle band only: the clip name chip overlays the top of the canvas.
+        QSet<QRgb> waveColours;
+        for (qreal fx = 0.1; fx < 0.9; fx += 0.02) {
+            const QPoint p =
+                ((waveOrigin + QPointF(wave->width() * fx, wave->height() * 0.5)) * waveDpr).toPoint();
+            if (waveShot.rect().contains(p))
+                waveColours.insert(waveShot.pixel(p));
+        }
+        QVERIFY2(waveColours.size() > 1, "the waveform canvas painted nothing");
+        flick->setProperty("contentX", scrolledX);
+        QTest::qWait(100);
         // Previews arrive off the GUI thread and reset the timeline and bin models, so geometry
         // captured earlier belongs to delegates that no longer exist.
         dropV1 = findItem(window->contentItem(), "dropV1");
