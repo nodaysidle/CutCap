@@ -1,4 +1,5 @@
 #include <QtTest/QtTest>
+#include <QElapsedTimer>
 #include <QTemporaryDir>
 #include <QFile>
 #include <QRegularExpression>
@@ -307,6 +308,7 @@ private slots:
 
         Backend b;
         b.importSingleMedia(vid);
+        waitForImports(b);
         QCOMPARE(b.clipsList().size(), 1);
         b.setPlayheadSec(1.5);
         b.splitAtPlayhead();
@@ -463,8 +465,10 @@ private slots:
         QVERIFY(!a.isEmpty() && !b.isEmpty());
         Backend backend;
         backend.importSingleMedia(a);              // V1 0..2
+        waitForImports(backend);
         const QString firstId = backend.assetsList().first().toMap().value("id").toString();
         backend.importSingleMedia(b);              // V1 appended at 2.0
+        waitForImports(backend);
         backend.setPlayheadSec(6.0);
 
         // 0.1s after the end of the existing clip: snap to the edge instead of leaving a sliver gap.
@@ -489,15 +493,18 @@ private slots:
         Backend backend;
         // A video dropped on V2 stays on V2; audio dropped on V2 is routed to A1.
         backend.importMediaAt({QUrl::fromLocalFile(vid)}, 1, 4.0);
+        waitForImports(backend);
         QCOMPARE(backend.clipsList().size(), 1);
         QCOMPARE(backend.clipsList().first().toMap().value("track").toInt(), 1);
         QCOMPARE(backend.clipsList().first().toMap().value("timelineStartSec").toDouble(), 4.0);
 
         backend.importMediaAt({QUrl::fromLocalFile(wav)}, 1, 1.0);
+        waitForImports(backend);
         QCOMPARE(backend.clipsList().last().toMap().value("track").toInt(), 2);
 
         // Two files: packed one after another from the drop point, not stacked.
         backend.importMediaAt({QUrl::fromLocalFile(vid), QUrl::fromLocalFile(vid)}, 0, 0.0);
+        waitForImports(backend);
         const auto clips = backend.clipsList();
         QCOMPARE(clips.size(), 4);
         QCOMPARE(clips[clips.size() - 2].toMap().value("track").toInt(), 0);
@@ -512,6 +519,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend backend;
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         const auto audioFilters = [&] {
             const QString joined = MediaEngine::buildExportArgs(backend.project(), "/tmp/o.mp4", ExportOptions{}, {}).join(" ");
             return joined.count("[1:a]");
@@ -538,6 +546,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend backend;
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         const QString clipId = backend.selectedClipId();
         backend.setPlayheadSec(0.5);
         backend.setLaneState(0, "locked", true);
@@ -567,12 +576,14 @@ private slots:
         const QString vid = makeSampleVideo(dir.path(), "est.mp4", "teal", 4.0);
         QVERIFY(!vid.isEmpty());
         Backend backend;
+        QTRY_VERIFY_WITH_TIMEOUT(backend.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
         const QVariantMap caps = backend.capabilities();
         const QVariantMap encoders = caps.value("encoders").toMap();
         QVERIFY(encoders.contains("h264"));
         QCOMPARE(encoders.value("h264").toBool(), true);
 
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         const QVariantMap projHigh = backend.estimateExport("high", "h264", "project");
         const QVariantMap projFast = backend.estimateExport("fast", "h264", "project");
         const QVariantMap uhdHigh = backend.estimateExport("high", "h264", "4k");
@@ -596,6 +607,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend backend;
         backend.importSingleMedia(vid);            // V1 0..2
+        waitForImports(backend);
         const QString assetId = backend.assetsList().first().toMap().value("id").toString();
         backend.addAssetToTimeline(assetId, 0, 4.0); // edge at 4..6, playhead 0
         backend.setPlayheadSec(0.0);
@@ -617,6 +629,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend backend;
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         const QString clipId = backend.selectedClipId();
         backend.applyLookPreset(clipId, "mono");
         QCOMPARE(backend.selectedClip().value("saturation").toDouble(), 0.0);
@@ -636,6 +649,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend b;
         b.importSingleMedia(vid);
+        waitForImports(b);
         const QString id = b.selectedClipId();
         for (int i = 1; i <= 20; ++i)
             b.updateClipProperty(id, "volume", 1.0 - i * 0.04);
@@ -728,7 +742,9 @@ private slots:
         }
         Backend backend;
         backend.importSingleMedia(baseVid);
+        waitForImports(backend);
         backend.importSingleMedia(pipVid);
+        waitForImports(backend);
         // Second import auto-appends to V1; move it onto V2 at 0s as a small bottom-right PiP.
         const QString pipClipId = backend.selectedClipId();
         backend.moveClip(pipClipId, 0.0, 1);
@@ -851,9 +867,15 @@ private slots:
         tone.start("ffmpeg", {"-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=300:duration=2", wav});
         QVERIFY(tone.waitForFinished(10000) && tone.exitCode() == 0);
         backend.importSingleMedia(wav);
+        waitForImports(backend);
         QTest::qWait(200);
         auto *wave = firstVisible("clipWave");
         QVERIFY2(wave, "audio clips must show a waveform");
+        // Previews arrive off the GUI thread and reset the timeline and bin models, so geometry
+        // captured earlier belongs to delegates that no longer exist.
+        dropV1 = findItem(window->contentItem(), "dropV1");
+        card = findItem(window->contentItem(), "assetCard");
+        QVERIFY(dropV1 && card);
 
         // File drops from outside are routed by geometry: a point over V1 maps to track 0 and a time,
         // a point outside the lanes falls back to plain import.
@@ -897,7 +919,8 @@ private slots:
         QCoreApplication::sendEvent(window, &enter);
         QCoreApplication::sendEvent(window, &move);
         QCoreApplication::sendEvent(window, &drop);
-        QTest::qWait(300);
+        waitForImports(backend);
+        QTest::qWait(200);
         QCOMPARE(backend.clipsList().size(), beforeFileDrop + 1);
         const QVariantMap placed = backend.clipsList().last().toMap();
         QCOMPARE(placed.value("track").toInt(), 0);
@@ -1247,11 +1270,17 @@ private slots:
 
     // ---- multi-select -------------------------------------------------------
 
+    // Imports probe and prepare media off the GUI thread; drain the queue before asserting on it.
+    static void waitForImports(Backend &b, int timeoutMs = 60000) {
+        QTRY_VERIFY_WITH_TIMEOUT(b.importing() == 0, timeoutMs);
+    }
+
     // Builds `count` two-second clips on one track at `firstStart + i * step`, in the order given,
     // and returns their ids. The asset is imported once so the ids are clips, not assets.
     static QStringList buildClips(Backend &b, const QString &videoPath, int track, int count,
                                   double firstStart, double step = 2.0) {
         b.importMediaAt({videoPath}, track, firstStart);
+        waitForImports(b);
         const QString assetId = b.assetsList().last().toMap().value("id").toString();
         for (int i = 1; i < count; ++i)
             b.addAssetToTimeline(assetId, track, firstStart + i * step);
@@ -1346,6 +1375,7 @@ private slots:
 
         Backend b;
         b.importSingleMedia(mp3);
+        waitForImports(b);
         QCOMPARE(b.clipsList().size(), 1);
         QVariantMap clip = b.clipsList().first().toMap();
         QCOMPARE(clip.value("kind").toString(), QString("audio"));
@@ -1444,6 +1474,7 @@ private slots:
         Backend b;
         const QStringList ids = buildClips(b, vid, 0, 3, 1.0);
         b.importMediaAt({wav}, 2, 10.0);
+        waitForImports(b);
         QString audioId;
         for (const QVariant &v : b.clipsList()) {
             if (v.toMap().value("track").toInt() == 2)
@@ -1508,6 +1539,7 @@ private slots:
         const QStringList ids = buildClips(b, vid, 0, 3, 0.0);
         QCOMPARE(b.clipsList().size(), 3);
         b.importMediaAt({wav}, 2, 10.0);
+        waitForImports(b);
         QString audioId;
         for (const QVariant &v : b.clipsList()) {
             if (v.toMap().value("track").toInt() == 2)
@@ -1599,6 +1631,7 @@ private slots:
         QVERIFY(!vid.isEmpty());
         Backend b;
         b.importMediaAt({vid}, 0, 0.0);
+        waitForImports(b);
         const QString assetId = b.assetsList().last().toMap().value("id").toString();
         b.addAssetToTimeline(assetId, 1, 0.0);
         QCOMPARE(b.clipsList().size(), 2);
@@ -1631,6 +1664,7 @@ private slots:
 
         Backend b;
         b.importMediaAt({vid}, 0, 0.0);
+        waitForImports(b);
         QCOMPARE(b.clipsList().size(), 1);
         const QString clipId = b.clipsList().first().toMap().value("id").toString();
         QCOMPARE(b.clipsList().first().toMap().value("track").toInt(), 0);
@@ -1703,6 +1737,7 @@ private slots:
         QVERIFY(QTest::qWaitForWindowExposed(window));
 
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         QVERIFY(backend.dirty());
 
         window->close();
@@ -1729,6 +1764,7 @@ private slots:
         QTest::qWait(200);
         QVERIFY(window->isVisible());
         backend.importSingleMedia(vid);
+        waitForImports(backend);
         QVERIFY(backend.dirty());
         window->close();
         QTest::qWait(300);
@@ -1739,6 +1775,30 @@ private slots:
         QTest::qWait(200);
         QVERIFY2(!window->isVisible(), "Discard must close the window");
         QVERIFY2(backend.dirty(), "Discard must not save the project");
+    }
+
+    // Media I/O must not block the GUI thread: the call returns at once and the asset, its real
+    // duration and its previews arrive afterwards.
+    void testImportIsAsync() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "ten.mp4", "olive", 10.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        QElapsedTimer timer;
+        timer.start();
+        b.importSingleMedia(vid);
+        const qint64 elapsedMs = timer.elapsed();
+        QVERIFY2(elapsedMs < 200, qPrintable(QString("importSingleMedia blocked the GUI for %1 ms").arg(elapsedMs)));
+
+        QTRY_VERIFY_WITH_TIMEOUT(b.clipsList().size() == 1, 30000);
+        QVERIFY(std::abs(b.clipsList().first().toMap().value("durationSec").toDouble() - 10.0) < 0.2);
+        QTRY_VERIFY_WITH_TIMEOUT(b.importing() == 0, 60000);
+
+        const QVariantMap asset = b.assetsList().first().toMap();
+        QVERIFY2(!asset.value("thumbnailPath").toString().isEmpty(), "the thumbnail never arrived");
+        QVERIFY2(!asset.value("filmstripPath").toString().isEmpty(), "the filmstrip never arrived");
+        QCOMPARE(asset.value("waveformPeaks").toList().size(), 80);
     }
 };
 

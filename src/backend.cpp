@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
+#include <utility>
 
 Backend::Backend(QObject *parent) : QObject(parent) {
     m_playbackTimer.setInterval(16);
@@ -37,6 +39,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
         refreshLanes();
         refreshActiveTexts(true);
     });
+
+    refreshCapabilities();
 
     connect(&m_exportProcess, &QProcess::readyReadStandardError, this, [this] {
         const QString chunk = QString::fromUtf8(m_exportProcess.readAllStandardError());
@@ -77,11 +81,12 @@ Backend::Backend(QObject *parent) : QObject(parent) {
         }
         const QString path = m_voiceoverPath;
         const double startSec = m_voiceoverStartSec;
-        const QString assetId = importAsset(path);
-        if (assetId.isEmpty())
-            return; // importAsset already reported the reason; leave the timeline untouched
-        addAssetToTimeline(assetId, 2, startSec);
-        setStatus("Voiceover recorded & added to Audio track");
+        importAssetAsync(path, [this, startSec](const QString &assetId) {
+            if (assetId.isEmpty())
+                return; // the import already reported the reason; leave the timeline untouched
+            addAssetToTimeline(assetId, 2, startSec);
+            setStatus("Voiceover recorded & added to Audio track");
+        });
     });
 }
 
@@ -436,7 +441,19 @@ QVariantList Backend::lanesList() const {    QVariantList out;
 }
 
 QVariantMap Backend::capabilities() const {
-    return MediaEngine::detectCapabilities().toJson().toVariantMap();
+    return m_caps.toJson().toVariantMap();
+}
+
+// Detecting the toolchain runs several PATH and ffmpeg queries, so it happens once off the GUI thread.
+void Backend::refreshCapabilities() {
+    auto future = QtConcurrent::run([]() { return MediaEngine::detectCapabilities(); });
+    auto *watcher = new QFutureWatcher<Capabilities>(this);
+    connect(watcher, &QFutureWatcher<Capabilities>::finished, this, [this, watcher] {
+        m_caps = watcher->result();
+        watcher->deleteLater();
+        emit capabilitiesChanged();
+    });
+    watcher->setFuture(future);
 }
 
 void Backend::newProject() {
@@ -468,8 +485,6 @@ bool Backend::openProject(const QString &pathOrUrl) {
         fail("Failed to open project: " + err);
         return false;
     }
-    for (auto &asset : loaded.assets)
-        MediaEngine::preparePreviews(asset);
     m_undoStack.clear();
     m_redoStack.clear();
     m_project = loaded;
@@ -487,6 +502,8 @@ bool Backend::openProject(const QString &pathOrUrl) {
     emit selectionChanged();
     emit previewChanged();
     setStatus("Opened " + QFileInfo(path).fileName());
+    for (const auto &asset : m_project.assets)
+        startPreviewJob(asset);
     return true;
 }
 
@@ -553,43 +570,115 @@ void Backend::importSingleMedia(const QString &pathOrUrl) {
         }
     }
 
-    const QString assetId = importAsset(path);
-    const int idx = m_project.findAssetIndex(assetId);
-    if (idx < 0)
-        return;
-    // Auto-add first clip or newly dropped media to timeline for instant CapCut feel
-    addAssetToTimeline(assetId, m_project.assets[idx].kind == "audio" ? 2 : 0, -1.0);
-    setStatus("Imported " + m_project.assets[idx].name);
+    importAssetAsync(path, [this](const QString &assetId) {
+        const int idx = m_project.findAssetIndex(assetId);
+        if (idx < 0)
+            return;
+        addAssetToTimeline(assetId, m_project.assets[idx].kind == "audio" ? 2 : 0, -1.0);
+        setStatus("Imported " + m_project.assets[idx].name);
+    });
 }
 
-// Imports one media file into the bin and returns its asset id (empty on failure).
-QString Backend::importAsset(const QString &pathOrUrl) {
+void Backend::importAssetAsync(const QString &pathOrUrl, const std::function<void(const QString &)> &onReady) {
     const QString path = normalizeLocalPath(pathOrUrl);
-    if (path.isEmpty())
-        return {};
+    if (path.isEmpty()) {
+        onReady({});
+        return;
+    }
+    const QString absolute = QFileInfo(path).absoluteFilePath();
     for (const auto &existing : m_project.assets) {
-        if (existing.path == QFileInfo(path).absoluteFilePath())
-            return existing.id;
+        if (existing.path == absolute) {
+            onReady(existing.id);
+            return;
+        }
     }
-    QString err;
-    MediaAsset asset = MediaEngine::probeMedia(path, &err);
-    if (!err.isEmpty()) {
-        fail(err);
-        return {};
+    if (!QFileInfo::exists(path)) {
+        fail("File not found: " + path);
+        onReady({});
+        return;
     }
-    MediaEngine::preparePreviews(asset);
-    pushUndo();
-    m_project.assets.append(asset);
-    emit assetsChanged();
-    return asset.id;
+
+    ++m_importing;
+    emit importStateChanged();
+    auto future = QtConcurrent::run([path]() -> std::pair<MediaAsset, QString> {
+        QString err;
+        MediaAsset asset = MediaEngine::probeMedia(path, &err);
+        return {asset, err};
+    });
+    auto *watcher = new QFutureWatcher<std::pair<MediaAsset, QString>>(this);
+    connect(watcher, &QFutureWatcher<std::pair<MediaAsset, QString>>::finished, this,
+            [this, watcher, onReady] {
+                const auto res = watcher->result();
+                watcher->deleteLater();
+                --m_importing;
+                emit importStateChanged();
+                if (!res.second.isEmpty()) {
+                    fail(res.second);
+                    onReady({});
+                    return;
+                }
+                const MediaAsset asset = res.first;
+                pushUndo();
+                if (m_project.findAssetIndex(asset.id) < 0) {
+                    m_project.assets.append(asset);
+                    emit assetsChanged();
+                }
+                onReady(asset.id);
+                startPreviewJob(asset);
+            });
+    watcher->setFuture(future);
+}
+
+void Backend::startPreviewJob(const MediaAsset &asset) {
+    ++m_importing;
+    emit importStateChanged();
+    auto future = QtConcurrent::run([asset]() {
+        MediaAsset prepared = asset;
+        MediaEngine::preparePreviews(prepared);
+        return prepared;
+    });
+    auto *watcher = new QFutureWatcher<MediaAsset>(this);
+    connect(watcher, &QFutureWatcher<MediaAsset>::finished, this, [this, watcher, assetId = asset.id] {
+        const MediaAsset prepared = watcher->result();
+        watcher->deleteLater();
+        --m_importing;
+        emit importStateChanged();
+        const int idx = m_project.findAssetIndex(assetId);
+        if (idx < 0)
+            return;
+        m_project.assets[idx].thumbnailPath = prepared.thumbnailPath;
+        m_project.assets[idx].filmstripPath = prepared.filmstripPath;
+        m_project.assets[idx].waveformPeaks = prepared.waveformPeaks;
+        emit assetsChanged();
+        // Clips carry their asset's previews, so the timeline model has to be rebuilt as well.
+        emit timelineChanged();
+    });
+    watcher->setFuture(future);
 }
 
 // Files dropped onto a lane: place each on the requested track at the drop time, packing them one
-// after another so a multi-file drop does not stack.
+// after another. Imports run one at a time so each file is packed after the real duration of the
+// previous one, and the GUI thread never waits on ffprobe.
+struct Backend::ImportChain {
+    Backend *backend = nullptr;
+    QStringList queue;
+    double cursor = 0.0;
+    int track = 0;
+};
+
 void Backend::importMediaAt(const QVariantList &pathsOrUrls, int track, double atSec) {
-    double cursor = std::max(0.0, atSec);
-    for (const auto &v : pathsOrUrls) {
-        const QString path = normalizeLocalPath(v.toString());
+    auto chain = std::make_shared<ImportChain>();
+    chain->backend = this;
+    chain->track = track;
+    chain->cursor = std::max(0.0, atSec);
+    for (const auto &v : pathsOrUrls)
+        chain->queue.append(v.toString());
+    processImportChain(chain);
+}
+
+void Backend::processImportChain(const std::shared_ptr<ImportChain> &chain) {
+    while (!chain->queue.isEmpty()) {
+        const QString path = normalizeLocalPath(chain->queue.takeFirst());
         if (path.endsWith(".cutcap", Qt::CaseInsensitive)) {
             openProject(path);
             continue;
@@ -598,17 +687,18 @@ void Backend::importMediaAt(const QVariantList &pathsOrUrls, int track, double a
             importSrtFile(path);
             continue;
         }
-        const QString assetId = importAsset(path);
-        if (assetId.isEmpty())
-            continue;
-        const int idx = m_project.findAssetIndex(assetId);
-        if (idx < 0)
-            continue;
-        const MediaAsset &asset = m_project.assets[idx];
-        const int lane = asset.kind == "audio" ? 2 : (track == 2 ? 0 : std::clamp(track, 0, 1));
-        addAssetToTimeline(assetId, lane, cursor);
-        cursor += asset.durationSec;
-        setStatus(QString("Placed %1 on %2").arg(asset.name, lane == 2 ? "A1" : (lane == 1 ? "V2" : "V1")));
+        importAssetAsync(path, [this, chain](const QString &assetId) {
+            const int idx = m_project.findAssetIndex(assetId);
+            if (idx >= 0) {
+                const MediaAsset &asset = m_project.assets[idx];
+                const int lane = asset.kind == "audio" ? 2 : (chain->track == 2 ? 0 : std::clamp(chain->track, 0, 1));
+                addAssetToTimeline(assetId, lane, chain->cursor);
+                chain->cursor += asset.durationSec;
+                setStatus(QString("Placed %1 on %2").arg(asset.name, lane == 2 ? "A1" : (lane == 1 ? "V2" : "V1")));
+            }
+            processImportChain(chain);
+        });
+        return;
     }
 }
 
@@ -1288,8 +1378,7 @@ void Backend::toggleVoiceoverRecording() {
         setStatus("Stopping voiceover recording...");
         return;
     }
-    const auto caps = MediaEngine::detectCapabilities();
-    if (!caps.pwRecord) {
+    if (!m_caps.pwRecord) {
         fail("PipeWire recorder (`pw-record` / `parec`) not found.");
         return;
     }
@@ -1323,11 +1412,12 @@ void Backend::generateLocalTts(const QString &text) {
             fail(err);
             return;
         }
-        const QString assetId = importAsset(outPath);
-        if (assetId.isEmpty())
-            return; // importAsset already reported the reason; no clip is moved and no success status is set
-        addAssetToTimeline(assetId, 2, startSec);
-        setStatus("Generated local TTS voiceover");
+        importAssetAsync(outPath, [this, startSec](const QString &assetId) {
+            if (assetId.isEmpty())
+                return; // the import already reported the reason; no clip is moved and no success status is set
+            addAssetToTimeline(assetId, 2, startSec);
+            setStatus("Generated local TTS voiceover");
+        });
     });
     watcher->setFuture(future);
 }
@@ -1379,7 +1469,7 @@ QVariantMap Backend::estimateExport(const QString &preset, const QString &codec,
     }
 
     const double durationSec = m_project.totalDurationSec();
-    const Capabilities caps = MediaEngine::detectCapabilities();
+    const Capabilities &caps = m_caps;
     const QString encoder = caps.encoderNameForCodec(codec);
     const bool codecSupported = caps.ffmpeg && caps.supportsVideoCodec(codec);
 
@@ -1451,7 +1541,7 @@ void Backend::startExport(const QString &outputPathOrUrl, const QString &preset,
         return;
     }
 
-    const Capabilities caps = MediaEngine::detectCapabilities();
+    const Capabilities &caps = m_caps;
     if (!caps.ffmpeg) {
         fail("FFmpeg is not installed — cannot export locally.");
         return;

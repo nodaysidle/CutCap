@@ -461,6 +461,15 @@ ApplicationWindow {
                     font.letterSpacing: 0.4
                 }
 
+                Text {
+                    objectName: "importingBadge"
+                    visible: backend.importing > 0
+                    text: "preparing"
+                    color: Design.textSecondary
+                    font.pixelSize: Design.tMicro
+                    font.letterSpacing: 0.4
+                }
+
                 Rectangle { width: 1; height: 14; color: Design.borderHairline }
 
                 ActionButton { text: "Import"; flat: true; horizontalPadding: Design.s3; onClicked: importDialog.open() }

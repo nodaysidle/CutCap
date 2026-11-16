@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
+#include <functional>
 
 class Backend : public QObject {
     Q_OBJECT
@@ -34,7 +35,8 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList activeTexts READ activeTexts NOTIFY activeTextsChanged)
     Q_PROPERTY(QVariantList lanesList READ lanesList NOTIFY timelineChanged)
     Q_PROPERTY(double snapGuideSec READ snapGuideSec NOTIFY snapGuideChanged)
-    Q_PROPERTY(QVariantMap capabilities READ capabilities CONSTANT)
+    Q_PROPERTY(QVariantMap capabilities READ capabilities NOTIFY capabilitiesChanged)
+    Q_PROPERTY(int importing READ importing NOTIFY importStateChanged)
 
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY timelineChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY timelineChanged)
@@ -81,6 +83,7 @@ public:
     QVariantList lanesList() const;
     double snapGuideSec() const { return m_snapGuideSec; }
     QVariantMap capabilities() const;
+    int importing() const { return m_importing; }
 
     bool canUndo() const { return !m_undoStack.isEmpty(); }
     bool canRedo() const { return !m_redoStack.isEmpty(); }
@@ -105,6 +108,7 @@ public:
     Q_INVOKABLE void newProject();
     Q_INVOKABLE bool openProject(const QString &pathOrUrl);
     Q_INVOKABLE bool saveProject(const QString &pathOrUrl = {});
+    Q_INVOKABLE void refreshCapabilities();
     Q_INVOKABLE void setProjectTitle(const QString &title);
     Q_INVOKABLE void setProjectResolution(int width, int height);
 
@@ -183,6 +187,8 @@ signals:
     void voiceoverStateChanged();
     void statusChanged();
     void errorOccurred(const QString &message);
+    void capabilitiesChanged();
+    void importStateChanged();
 
 private:
     enum class Lane { Base = 0, Overlay = 1, Audio = 2 };
@@ -193,7 +199,14 @@ private:
     void setStatus(const QString &msg);
     void fail(const QString &msg);
     QString normalizeLocalPath(const QString &pathOrUrl) const;
-    QString importAsset(const QString &pathOrUrl);
+    // Probes `path` off the GUI thread, adds the asset, then calls `onReady` on the GUI thread with
+    // the new asset id (empty when the probe failed; the reason is already reported).
+    void importAssetAsync(const QString &pathOrUrl, const std::function<void(const QString &)> &onReady);
+    // Fills one asset's thumbnail, filmstrip and waveform off the GUI thread and merges them back.
+    void startPreviewJob(const MediaAsset &asset);
+    // One dropped batch: the files still to place and where the next one starts.
+    struct ImportChain;
+    void processImportChain(const std::shared_ptr<ImportChain> &chain);
     // Snaps a timeline time to a neighbour's edge, the playhead or zero, within kSnapSec.
     double snapTime(double sec, int track, const QString &ignoreClipId = {}) const;
     const TimelineClip *clipAtPlayhead(Lane lane) const;
@@ -220,6 +233,8 @@ private:
     QList<Project> m_undoStack;
     QList<Project> m_redoStack;
     int m_idCounter = 1;
+    Capabilities m_caps;
+    int m_importing = 0;
 
     QTimer m_playbackTimer;
     QElapsedTimer m_playbackClock;
