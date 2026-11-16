@@ -1670,6 +1670,76 @@ private slots:
         QCOMPARE(clip.value("timelineStartSec").toDouble(), 0.0);
         QVERIFY2(b.statusMessage().contains("ffprobe"), qPrintable(b.statusMessage()));
     }
+
+    void testUnsavedChangesGuard() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "dirty.mp4", "0x336699", 1.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        ClipFrameItem::registerQmlType();
+        Theme theme(dir.path());
+        static std::unique_ptr<Design> design;
+        static bool designRegistered = false;
+        design = std::make_unique<Design>(theme);
+        if (!designRegistered) {
+            qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", design.get());
+            designRegistered = true;
+        }
+        Backend backend;
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty("theme", &theme);
+        engine.rootContext()->setContextProperty("backend", &backend);
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        backend.importSingleMedia(vid);
+        QVERIFY(backend.dirty());
+
+        window->close();
+        QTest::qWait(300);
+        QVERIFY2(window->isVisible(), "closing a project with unsaved edits must be refused");
+        auto *dialog = window->findChild<QObject *>("discardDialog");
+        QVERIFY2(dialog, "the unsaved-changes dialog does not exist");
+        QVERIFY2(dialog->property("opened").toBool(), "the unsaved-changes dialog did not open");
+
+        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+        QTest::qWait(100);
+        QVERIFY(window->isVisible());
+        QVERIFY(backend.dirty());
+
+        // Saving clears the edits, so the next close needs no prompt.
+        QVERIFY(backend.saveProject(dir.path() + "/guard.cutcap"));
+        QVERIFY(!backend.dirty());
+        window->close();
+        QTest::qWait(100);
+        QVERIFY2(!window->isVisible(), "a saved project must close without a prompt");
+
+        // Discard is the other exit: it closes without saving the edits.
+        window->show();
+        QTest::qWait(200);
+        QVERIFY(window->isVisible());
+        backend.importSingleMedia(vid);
+        QVERIFY(backend.dirty());
+        window->close();
+        QTest::qWait(300);
+        QVERIFY(window->isVisible());
+        auto *discardButton = window->findChild<QObject *>("discardDiscardButton");
+        QVERIFY2(discardButton, "the Discard button does not exist");
+        QVERIFY(QMetaObject::invokeMethod(discardButton, "clicked"));
+        QTest::qWait(200);
+        QVERIFY2(!window->isVisible(), "Discard must close the window");
+        QVERIFY2(backend.dirty(), "Discard must not save the project");
+    }
 };
 
 // Video textures, MultiEffect and shapes need an RHI scene graph; the offscreen platform otherwise

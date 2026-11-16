@@ -29,6 +29,50 @@ ApplicationWindow {
          activeFocusItem.toString().indexOf("TextArea") !== -1 ||
          activeFocusItem.toString().indexOf("TextField") !== -1)
 
+    // Quit, Open, Import and a dropped .cutcap all replace the timeline, so each asks first when
+    // the project has unsaved edits.
+    property var pendingDiscard: null
+    property var pendingSave: null
+    property bool allowClose: false
+
+    function urlsReplaceProject(urls) {
+        for (let i = 0; i < urls.length; ++i) {
+            if (String(urls[i]).toLowerCase().endsWith(".cutcap"))
+                return true
+        }
+        return false
+    }
+
+    function runUnlessDirty(action) {
+        if (!backend.dirty) {
+            action()
+            return
+        }
+        pendingDiscard = action
+        discardDialog.open()
+    }
+
+    function saveThenRun(action) {
+        if (backend.projectPath.length > 0) {
+            if (backend.saveProject() && action)
+                action()
+            return
+        }
+        pendingSave = action
+        saveProjectDialog.open()
+    }
+
+    onClosing: (close) => {
+        if (allowClose || !backend.dirty)
+            return
+        close.accepted = false
+        pendingDiscard = () => {
+            win.allowClose = true
+            win.close()
+        }
+        discardDialog.open()
+    }
+
     // Files dropped from outside the app: onto a timeline lane they land at the pointer, elsewhere
     // they are imported like the Import button. Internal media-bin drags are a different key so
     // this area does not swallow them.
@@ -37,8 +81,15 @@ ApplicationWindow {
         z: 100
         keys: ["text/uri-list"]
         onDropped: (drop) => {
-            if (drop.hasUrls)
-                timelinePanel.dropUrlsAt(drop.x, drop.y, drop.urls)
+            if (!drop.hasUrls)
+                return
+            const urls = drop.urls
+            const x = drop.x
+            const y = drop.y
+            if (win.urlsReplaceProject(urls))
+                win.runUnlessDirty(() => timelinePanel.dropUrlsAt(x, y, urls))
+            else
+                timelinePanel.dropUrlsAt(x, y, urls)
         }
     }
 
@@ -51,7 +102,13 @@ ApplicationWindow {
             "Media & Projects (*.mp4 *.mkv *.mov *.webm *.avi *.mp3 *.wav *.ogg *.flac *.png *.jpg *.jpeg *.webp *.srt *.cutcap)",
             "All files (*)"
         ]
-        onAccepted: backend.importMedia(selectedFiles)
+        onAccepted: {
+            const files = selectedFiles
+            if (win.urlsReplaceProject(files))
+                win.runUnlessDirty(() => backend.importMedia(files))
+            else
+                backend.importMedia(files)
+        }
     }
 
     FileDialog {
@@ -59,7 +116,13 @@ ApplicationWindow {
         title: "Save CutCap Project"
         fileMode: FileDialog.SaveFile
         nameFilters: ["CutCap Project (*.cutcap)"]
-        onAccepted: backend.saveProject(selectedFile)
+        onAccepted: {
+            const action = win.pendingSave
+            win.pendingSave = null
+            if (backend.saveProject(selectedFile) && action)
+                action()
+        }
+        onRejected: win.pendingSave = null
     }
 
     FileDialog {
@@ -67,7 +130,10 @@ ApplicationWindow {
         title: "Open CutCap Project"
         fileMode: FileDialog.OpenFile
         nameFilters: ["CutCap Project (*.cutcap)"]
-        onAccepted: backend.openProject(selectedFile)
+        onAccepted: {
+            const file = selectedFile
+            win.runUnlessDirty(() => backend.openProject(file))
+        }
     }
 
     FileDialog {
@@ -193,7 +259,97 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+Q"
         context: Qt.ApplicationShortcut
-        onActivated: Qt.quit()
+        onActivated: win.close()
+    }
+
+    Dialog {
+        id: discardDialog
+        objectName: "discardDialog"
+        title: "Unsaved changes"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(420, win.width - Design.s6 * 2)
+        padding: Design.s5
+
+        Material.theme: theme.darkMode ? Material.Dark : Material.Light
+        Material.accent: Design.accent
+        Material.background: Design.surfaceOverlay
+        Material.foreground: Design.textPrimary
+
+        background: Rectangle {
+            color: Design.surfaceOverlay
+            radius: Design.rLg
+            border.color: Design.borderStrong
+            border.width: 1
+        }
+
+        onClosed: win.pendingDiscard = null
+
+        contentItem: ColumnLayout {
+            spacing: Design.s4
+
+            Text {
+                Layout.fillWidth: true
+                text: "This project has unsaved changes."
+                color: Design.textPrimary
+                font.pixelSize: Design.tBody
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Save them before continuing?"
+                color: Design.textSecondary
+                font.pixelSize: Design.tCaption
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s3
+
+                Item { Layout.fillWidth: true }
+
+                ActionButton {
+                    objectName: "discardCancelButton"
+                    text: "Cancel"
+                    fontPixelSize: Design.tBody
+                    horizontalPadding: Design.s5
+                    verticalPadding: Design.s2
+                    onClicked: discardDialog.close()
+                }
+
+                ActionButton {
+                    objectName: "discardDiscardButton"
+                    text: "Discard"
+                    fontPixelSize: Design.tBody
+                    horizontalPadding: Design.s5
+                    verticalPadding: Design.s2
+                    onClicked: {
+                        const action = win.pendingDiscard
+                        win.pendingDiscard = null
+                        discardDialog.close()
+                        if (action)
+                            action()
+                    }
+                }
+
+                ActionButton {
+                    objectName: "discardSaveButton"
+                    text: "Save"
+                    highlighted: true
+                    fontPixelSize: Design.tBody
+                    horizontalPadding: Design.s5
+                    verticalPadding: Design.s2
+                    onClicked: {
+                        const action = win.pendingDiscard
+                        win.pendingDiscard = null
+                        discardDialog.close()
+                        win.saveThenRun(action)
+                    }
+                }
+            }
+        }
     }
 
     // Error toast
