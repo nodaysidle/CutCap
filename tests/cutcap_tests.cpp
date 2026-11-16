@@ -601,6 +601,63 @@ private slots:
         QVERIFY(!projHigh.value("estimatedSizeLabel").toString().isEmpty());
     }
 
+    // A failed export must say why. The ready-read handler drains ffmpeg's stderr for the progress
+    // bar, so the tail has to survive for the finished handler.
+    void testExportErrorHasReason() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "gone.mp4", "blue", 1.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        QTRY_VERIFY_WITH_TIMEOUT(b.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 1);
+
+        // The source disappears between import and export, so ffmpeg fails with a real message.
+        QVERIFY(QFile::remove(vid));
+
+        QSignalSpy finished(&b, &Backend::exportFinished);
+        b.startExport(dir.path() + "/out.mp4", "fast", "h264", "project");
+        QTRY_VERIFY_WITH_TIMEOUT(finished.count() == 1, 60000);
+
+        const QList<QVariant> result = finished.takeFirst();
+        QCOMPARE(result.value(0).toBool(), false);
+        const QString message = result.value(1).toString();
+        QVERIFY2(message.contains("No such file", Qt::CaseInsensitive), qPrintable("no reason given: " + message));
+        QVERIFY2(!message.startsWith("ffmpeg exited with code"), qPrintable("only the exit code: " + message));
+        QVERIFY2(b.statusMessage().startsWith("Export failed") &&
+                     b.statusMessage().contains("No such file", Qt::CaseInsensitive),
+                 qPrintable(b.statusMessage()));
+    }
+
+    // Cancelling must remove the half-written file and must not be reported as a failure reason.
+    void testCancelRemovesPartial() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "long.mp4", "0x224466", 8.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        QTRY_VERIFY_WITH_TIMEOUT(b.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 1);
+
+        const QString out = dir.path() + "/partial.mp4";
+        QSignalSpy finished(&b, &Backend::exportFinished);
+        b.startExport(out, "high", "h264", "project");
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(out), 20000);
+        QVERIFY2(b.exporting(), "the export finished before it could be cancelled");
+
+        b.cancelExport();
+        QTRY_VERIFY_WITH_TIMEOUT(finished.count() == 1, 20000);
+        const QList<QVariant> result = finished.takeFirst();
+        QCOMPARE(result.value(0).toBool(), false);
+        QCOMPARE(result.value(1).toString(), QString("cancelled"));
+        QVERIFY2(!QFileInfo::exists(out), "cancel must remove the partial output");
+        QCOMPARE(b.statusMessage(), QString("Export cancelled"));
+    }
+
     void previewSnapExposesGuide() {
         QTemporaryDir dir;
         const QString vid = makeSampleVideo(dir.path(), "snap.mp4", "teal", 2.0);

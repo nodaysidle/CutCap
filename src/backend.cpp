@@ -14,6 +14,25 @@
 #include <memory>
 #include <utility>
 
+// ffmpeg logs its banner, the input dump and the progress bar to the same stream as its errors, so
+// a failure message has to pick the line that says what went wrong instead of showing the whole tail.
+static QString exportErrorReason(const QString &stderrTail) {
+    static const QRegularExpression problem(QStringLiteral(
+        "error|invalid|failed|unable|unknown|not found|no such file|no space|denied|unsupported"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression breaks(QStringLiteral("[\\r\\n]+"));
+    const QStringList lines = stderrTail.split(breaks, Qt::SkipEmptyParts);
+    for (int i = lines.size() - 1; i >= 0; --i) {
+        if (problem.match(lines.at(i)).hasMatch())
+            return lines.at(i).trimmed();
+    }
+    for (int i = lines.size() - 1; i >= 0; --i) {
+        if (!lines.at(i).trimmed().isEmpty())
+            return lines.at(i).trimmed();
+    }
+    return {};
+}
+
 Backend::Backend(QObject *parent) : QObject(parent) {
     m_playbackTimer.setInterval(16);
     m_playbackTimer.setTimerType(Qt::PreciseTimer);
@@ -44,6 +63,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
 
     connect(&m_exportProcess, &QProcess::readyReadStandardError, this, [this] {
         const QString chunk = QString::fromUtf8(m_exportProcess.readAllStandardError());
+        m_exportStderrTail = (m_exportStderrTail + chunk).right(2048);
         const QRegularExpression timeRe(R"(time=(\d+):(\d+):(\d+\.\d+))");
         auto it = timeRe.globalMatch(chunk);
         while (it.hasNext()) {
@@ -66,8 +86,15 @@ Backend::Backend(QObject *parent) : QObject(parent) {
         if (ok) {
             setStatus("Exported: " + m_exportOutputPath);
             emit exportFinished(true, "Saved to " + m_exportOutputPath);
+        } else if (m_exportCancelled) {
+            m_exportCancelled = false;
+            QFile::remove(m_exportOutputPath);
+            setStatus("Export cancelled");
+            emit exportFinished(false, "cancelled");
         } else {
-            const QString err = QString::fromUtf8(m_exportProcess.readAllStandardError()).right(400);
+            m_exportStderrTail += QString::fromUtf8(m_exportProcess.readAllStandardError());
+            const QString reason = exportErrorReason(m_exportStderrTail);
+            const QString err = reason.isEmpty() ? QString("ffmpeg exited with code %1").arg(code) : reason;
             fail("Export failed: " + err);
             emit exportFinished(false, err);
         }
@@ -1577,6 +1604,8 @@ void Backend::startExport(const QString &outputPathOrUrl, const QString &preset,
         m_exportTempAss = MediaEngine::generateAssSubtitles(m_project, ass, opts.width, opts.height);
     }
 
+    m_exportStderrTail.clear();
+    m_exportCancelled = false;
     m_exportOutputPath = outPath;
     m_exportProgress = 0.0;
     const QStringList args = MediaEngine::buildExportArgs(m_project, outPath, opts, m_exportTempAss);
@@ -1586,10 +1615,11 @@ void Backend::startExport(const QString &outputPathOrUrl, const QString &preset,
 }
 
 void Backend::cancelExport() {
-    if (exporting()) {
-        m_exportProcess.kill();
-        setStatus("Export cancelled");
-    }
+    if (!exporting())
+        return;
+    m_exportCancelled = true;
+    m_exportProcess.kill();
+    setStatus("Export cancelled");
 }
 
 void Backend::undo() {

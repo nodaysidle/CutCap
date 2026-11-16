@@ -55,6 +55,9 @@ Dialog {
             if (ok) {
                 resultText.color = Design.success
                 resultText.text = message
+            } else if (message === "cancelled") {
+                resultText.color = Design.textSecondary
+                resultText.text = "Export cancelled"
             } else {
                 resultText.color = Design.danger
                 resultText.text = "Error: " + message

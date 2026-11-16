@@ -247,6 +247,8 @@ private:
     double m_exportProgress = 0.0;
     QString m_exportTempAss;
     QString m_exportOutputPath;
+    QString m_exportStderrTail; // last 2 KB of ffmpeg stderr, kept because the ready-read handler drains it
+    bool m_exportCancelled = false;
 
     QProcess m_voiceoverProcess;
     QString m_voiceoverPath;
