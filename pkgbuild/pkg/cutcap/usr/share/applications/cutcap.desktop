@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CutCap
+Comment=Local-first video editor for Omarchy
+Exec=cutcap open %F
+Icon=cutcap
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;application/x-cutcap;
+StartupNotify=true

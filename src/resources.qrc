@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/ActionButton.qml</file>
+        <file>qml/MediaBinPanel.qml</file>
+        <file>qml/PreviewPanel.qml</file>
+        <file>qml/PreviewLane.qml</file>
+        <file>qml/InspectorPanel.qml</file>
+        <file>qml/TimelinePanel.qml</file>
+        <file>qml/ExportDialog.qml</file>
+        <file>qml/ShortcutsDialog.qml</file>
+    </qresource>
+</RCC>
