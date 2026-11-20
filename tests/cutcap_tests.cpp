@@ -1931,8 +1931,93 @@ private slots:
                 dialogue = line;
         }
         QVERIFY2(!dialogue.isEmpty(), "no dialogue line was written");
-        QVERIFY2(dialogue.contains("C:\\\\new folder"), qPrintable(dialogue));
-        QVERIFY2(!dialogue.contains("C:\\new folder"), qPrintable(dialogue));
+        // libass has no escape for a backslash; a word joiner after it stops "\n", "\N" and "\h"
+        // from being read as line breaks and hard spaces.
+        QVERIFY2(dialogue.contains(QString("C:\\") + QChar(0x2060) + "new folder"), qPrintable(dialogue));
+        QVERIFY2(!dialogue.contains("\\\\"), qPrintable(dialogue));
+    }
+
+    // Two parses must never hand out the same caption id, or editing one caption edits another.
+    void testCaptionIdsAreUnique() {
+        const QString srt = "1\n00:00:00,000 --> 00:00:01,000\nHello\n\n2\n00:00:01,000 --> 00:00:02,000\nWorld\n";
+        QSet<QString> ids;
+        for (int pass = 0; pass < 3; ++pass) {
+            const auto items = MediaEngine::parseSrt(srt, true);
+            QCOMPARE(items.size(), 2);
+            for (const auto &t : items)
+                ids.insert(t.id);
+        }
+        QCOMPARE(ids.size(), 6);
+    }
+
+    // Cue times come back relative to the part of the source the clip plays; they are placed on
+    // the timeline through the clip's start and speed, and anything past the clip's end is dropped.
+    void testCaptionsFollowTrimAndSpeed() {
+        TimelineClip clip;
+        clip.timelineStartSec = 4.0;
+        clip.durationSec = 3.0;   // on the timeline
+        clip.sourceInSec = 20.0;
+        clip.speed = 2.0;         // plays 6 s of source
+        QList<TextOverlay> cues;
+        TextOverlay a; a.id = "a"; a.startSec = 1.0; a.durationSec = 2.0; cues.append(a);
+        TextOverlay b; b.id = "b"; b.startSec = 5.0; b.durationSec = 4.0; cues.append(b);
+        TextOverlay c; c.id = "c"; c.startSec = 6.5; c.durationSec = 1.0; cues.append(c);
+
+        const auto placed = MediaEngine::captionsForClip(cues, clip);
+        QCOMPARE(placed.size(), 2);
+        QCOMPARE(placed[0].id, QString("a"));
+        QVERIFY(std::abs(placed[0].startSec - 4.5) < 1e-6);
+        QVERIFY(std::abs(placed[0].durationSec - 1.0) < 1e-6);
+        // "b" starts inside the clip and is cut at the clip's end (timeline 7.0).
+        QVERIFY(std::abs(placed[1].startSec - 6.5) < 1e-6);
+        QVERIFY(std::abs(placed[1].durationSec - 0.5) < 1e-6);
+    }
+
+    // Auto-captions transcribe only the part of the source the clip plays, and land where it plays.
+    void testAutoCaptionsUseTheClipSpan() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "span.mp4", "teal", 6.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 1);
+        const QString clipId = b.clipsList().first().toMap().value("id").toString();
+
+        // Trim: the clip now starts 2 s into its source, sits at timeline 0 and lasts 3 s.
+        b.trimClip(clipId, 0.0, 3.0, 2.0);
+        b.moveClip(clipId, 4.0, 0);
+        const QVariantMap clip = b.clipsList().first().toMap();
+        QCOMPARE(clip.value("sourceInSec").toDouble(), 2.0);
+        QCOMPARE(clip.value("timelineStartSec").toDouble(), 4.0);
+
+        // A whisper-cli that copies the audio it was given and writes a cue 1 s into that audio.
+        const QString bin = dir.path() + "/faketools";
+        const QString copied = dir.path() + "/whisper-input.wav";
+        QVERIFY(!makeTool(bin, "whisper-cli", "#!/bin/sh\nout=\nin=\n"
+                                              "while [ $# -gt 0 ]; do\n"
+                                              "  if [ \"$1\" = \"-of\" ]; then out=\"$2\"; fi\n"
+                                              "  if [ \"$1\" = \"-f\" ]; then in=\"$2\"; fi\n"
+                                              "  shift\n"
+                                              "done\n"
+                                              "cp \"$in\" '" + copied.toUtf8() + "'\n"
+                                              "printf '1\\n00:00:01,000 --> 00:00:02,000\\nSpoken\\n\\n' > \"$out.srt\"\n"
+                                              "").isEmpty());
+        const QByteArray oldPath = qgetenv("PATH");
+        PathRestore restore{oldPath};
+        qputenv("PATH", bin.toUtf8() + ":" + oldPath);
+
+        b.generateAutoCaptions(clipId, "en");
+        QTRY_VERIFY_WITH_TIMEOUT(!b.busy(), 30000);
+        QCOMPARE(b.textsList().size(), 1);
+        const QVariantMap cap = b.textsList().first().toMap();
+        // The cue is 1 s into the transcribed span, so it belongs 1 s after the clip's start.
+        QVERIFY2(std::abs(cap.value("startSec").toDouble() - 5.0) < 0.01, qPrintable(cap.value("startSec").toString()));
+        // Only the 3 s the clip plays was transcribed, not the whole 6 s file.
+        QVERIFY2(QFileInfo::exists(copied), "whisper-cli never received the audio");
+        const double d = probeDurationSec(copied);
+        QVERIFY2(std::abs(d - 3.0) < 0.3, qPrintable(QString::number(d)));
     }
 
     // Only regenerable previews are swept; recordings survive, old previews go, kept and recent stay.

@@ -58,8 +58,13 @@ public:
     static QString exportSrt(const QList<TextOverlay> &texts);
 
     // Synchronous helpers for CLI / background threads
+    // spanStartSec/spanLengthSec limit the transcription to part of the file; cue times are then
+    // relative to spanStartSec. A negative length means "to the end".
     static QList<TextOverlay> runAutoCaptions(const QString &mediaPath, const QString &language = "en",
-                                              QString *error = nullptr);
+                                              QString *error = nullptr, double spanStartSec = 0.0,
+                                              double spanLengthSec = -1.0);
+    // Maps cues that are relative to the clip's source-in point onto the timeline.
+    static QList<TextOverlay> captionsForClip(const QList<TextOverlay> &cues, const TimelineClip &clip);
     static bool runLocalTts(const QString &text, const QString &outputWavPath, QString *error = nullptr);
     static bool runAiBackgroundRemoval(const QString &inputPath, const QString &outputPath, QString *error = nullptr);
 };

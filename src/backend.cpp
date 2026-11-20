@@ -1404,10 +1404,9 @@ void Backend::generateAutoCaptions(const QString &clipId, const QString &languag
     emit busyStateChanged();
     auto future = QtConcurrent::run([clip, language]() -> std::pair<QList<TextOverlay>, QString> {
         QString err;
-        auto captions = MediaEngine::runAutoCaptions(clip.sourcePath, language, &err);
-        for (auto &c : captions)
-            c.startSec += clip.timelineStartSec;
-        return {captions, err};
+        const auto cues = MediaEngine::runAutoCaptions(clip.sourcePath, language, &err, clip.sourceInSec,
+                                                       clip.durationSec * clip.speed);
+        return {MediaEngine::captionsForClip(cues, clip), err};
     });
 
     auto *watcher = new QFutureWatcher<std::pair<QList<TextOverlay>, QString>>(this);

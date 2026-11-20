@@ -12,6 +12,7 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <algorithm>
 #include <cmath>
 
@@ -327,7 +328,9 @@ QString MediaEngine::generateAssSubtitles(const Project &project, const QString 
         const QString primary = toAssColor(t.color, 1.0);
         const QString back = toAssColor(t.bgColor, t.bgOpacity);
         QString escaped = t.text;
-        escaped.replace("\\", "\\\\");
+        // libass has no backslash escape; a word joiner after it keeps "\N", "\n" and "\h" in user
+        // text from being read as control codes, and draws nothing itself.
+        escaped.replace("\\", QString("\\") + QChar(0x2060));
         escaped.replace("\n", "\\N");
         escaped.replace("{", "\\{").replace("}", "\\}");
 
@@ -757,7 +760,6 @@ QList<TextOverlay> MediaEngine::parseSrt(const QString &srtContent, bool asCapti
     QString normalized = srtContent;
     normalized.replace("\r\n", "\n");
     const auto blocks = normalized.split(QRegularExpression("\n{2,}"), Qt::SkipEmptyParts);
-    int idx = 1;
     for (const auto &block : blocks) {
         const auto lines = block.split('\n', Qt::SkipEmptyParts);
         int timeLine = -1;
@@ -777,7 +779,8 @@ QList<TextOverlay> MediaEngine::parseSrt(const QString &srtContent, bool asCapti
         QStringList textLines = lines.mid(timeLine + 1);
 
         TextOverlay t;
-        t.id = QString("cap_%1_%2").arg(idx++).arg(int(start * 100));
+        // Unique across parses: ids are how the timeline tells captions apart.
+        t.id = "cap_" + QUuid::createUuid().toString(QUuid::Id128).left(12);
         t.text = textLines.join("\n").trimmed();
         t.isCaption = asCaptions;
         t.startSec = start;
@@ -814,7 +817,8 @@ QString MediaEngine::exportSrt(const QList<TextOverlay> &texts) {
     return out;
 }
 
-QList<TextOverlay> MediaEngine::runAutoCaptions(const QString &mediaPath, const QString &language, QString *error) {
+QList<TextOverlay> MediaEngine::runAutoCaptions(const QString &mediaPath, const QString &language, QString *error,
+                                                double spanStartSec, double spanLengthSec) {
     const auto caps = detectCapabilities();
     if (caps.whisperCmd.isEmpty()) {
         if (error) {
@@ -833,8 +837,14 @@ QList<TextOverlay> MediaEngine::runAutoCaptions(const QString &mediaPath, const 
     }
 
     const QString wavPath = tmp.path() + "/audio.wav";
+    QStringList extract{"-y"};
+    if (spanStartSec > 0.0)
+        extract << "-ss" << QString::number(spanStartSec, 'f', 3);
+    if (spanLengthSec > 0.0)
+        extract << "-t" << QString::number(spanLengthSec, 'f', 3);
+    extract << "-i" << mediaPath << "-ar" << "16000" << "-ac" << "1" << "-c:a" << "pcm_s16le" << wavPath;
     QProcess ff;
-    ff.start("ffmpeg", {"-y", "-i", mediaPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavPath});
+    ff.start("ffmpeg", extract);
     if (!ff.waitForFinished(60000) || ff.exitCode() != 0) {
         if (error)
             *error = "Failed to extract audio for captions.";
@@ -861,6 +871,21 @@ QList<TextOverlay> MediaEngine::runAutoCaptions(const QString &mediaPath, const 
         return {};
     }
     return parseSrt(QString::fromUtf8(srtFile.readAll()), true);
+}
+
+QList<TextOverlay> MediaEngine::captionsForClip(const QList<TextOverlay> &cues, const TimelineClip &clip) {
+    QList<TextOverlay> out;
+    const double speed = clip.speed > 0.0 ? clip.speed : 1.0;
+    const double clipEnd = clip.timelineStartSec + clip.durationSec;
+    for (TextOverlay cue : cues) {
+        const double start = clip.timelineStartSec + cue.startSec / speed;
+        if (start >= clipEnd)
+            continue; // spoken after the part of the source this clip plays
+        cue.startSec = start;
+        cue.durationSec = std::min(cue.durationSec / speed, clipEnd - start);
+        out.append(cue);
+    }
+    return out;
 }
 
 bool MediaEngine::runLocalTts(const QString &text, const QString &outputWavPath, QString *error) {
