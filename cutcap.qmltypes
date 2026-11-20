@@ -771,9 +771,9 @@ Module {
             lineNumber: 45
             isReadonly: true
         }
-        Signal { name: "imageSourceChanged"; lineNumber: 73 }
-        Signal { name: "lookChanged"; lineNumber: 74 }
-        Signal { name: "hasFrameChanged"; lineNumber: 75 }
+        Signal { name: "imageSourceChanged"; lineNumber: 74 }
+        Signal { name: "lookChanged"; lineNumber: 75 }
+        Signal { name: "hasFrameChanged"; lineNumber: 76 }
     }
     Component {
         file: "design.h"

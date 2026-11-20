@@ -68,6 +68,7 @@ public:
 
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
+    void itemChange(ItemChange change, const ItemChangeData &data) override;
 
 signals:
     void imageSourceChanged();
@@ -79,6 +80,8 @@ private:
     void setVideoFrame(const QVideoFrame &frame);
     void scheduleProcessing();
     ClipLook currentLook() const;
+    bool canBeSeen() const;
+    void resumeIfPending();
 
     QVideoSink *m_sink;
     QString m_imageSource;
@@ -88,6 +91,7 @@ private:
     QImage m_output;
     bool m_textureDirty = false;
     bool m_dirtyWhileBusy = false;
+    bool m_pendingWhileUnseen = false;
     QFutureWatcher<QImage> m_watcher;
 
     double m_brightness = 0.0;

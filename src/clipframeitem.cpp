@@ -181,6 +181,7 @@ ClipFrameItem::ClipFrameItem(QQuickItem *parent) : QQuickItem(parent), m_sink(ne
         }
     });
     connect(this, &ClipFrameItem::lookChanged, this, &ClipFrameItem::scheduleProcessing);
+    connect(this, &QQuickItem::visibleChanged, this, &ClipFrameItem::resumeIfPending);
 }
 
 ClipFrameItem::~ClipFrameItem() {
@@ -192,8 +193,41 @@ void ClipFrameItem::setImageSource(const QString &source) {
         return;
     m_imageSource = source;
     emit imageSourceChanged();
+    if (source.isEmpty()) {
+        setSource(QImage(), false);
+        return;
+    }
+    // Decoding a large photo takes long enough to stall the UI; do it in a worker and take the
+    // result only if this is still the image being shown.
     const QString path = source.startsWith("file:") ? QUrl(source).toLocalFile() : source;
-    setSource(source.isEmpty() ? QImage() : QImage(path), false);
+    auto *loader = new QFutureWatcher<QImage>(this);
+    connect(loader, &QFutureWatcher<QImage>::finished, this, [this, loader, source] {
+        loader->deleteLater();
+        if (source == m_imageSource)
+            setSource(loader->result(), false);
+    });
+    loader->setFuture(QtConcurrent::run([path] { return QImage(path); }));
+}
+
+// Hidden, or in a window the compositor is not showing (another workspace, minimised): Qt reports
+// such a window as not exposed and renders nothing, so processing frames for it is wasted work.
+bool ClipFrameItem::canBeSeen() const {
+    return isVisible() && (!window() || window()->isExposed());
+}
+
+void ClipFrameItem::resumeIfPending() {
+    if (m_pendingWhileUnseen && canBeSeen()) {
+        m_pendingWhileUnseen = false;
+        scheduleProcessing();
+    }
+}
+
+void ClipFrameItem::itemChange(ItemChange change, const ItemChangeData &data) {
+    // A swapped frame is the sign the window is being shown again after it was not exposed.
+    if (change == ItemSceneChange && data.window)
+        connect(data.window, &QQuickWindow::frameSwapped, this, &ClipFrameItem::resumeIfPending,
+                Qt::UniqueConnection);
+    QQuickItem::itemChange(change, data);
 }
 
 #define CUTCAP_SETTER(Name, Type, member)  \
@@ -244,6 +278,10 @@ ClipLook ClipFrameItem::currentLook() const {
 }
 
 void ClipFrameItem::scheduleProcessing() {
+    if (!canBeSeen()) {
+        m_pendingWhileUnseen = true;
+        return;
+    }
     if (m_watcher.isRunning()) {
         m_dirtyWhileBusy = true;
         return;

@@ -576,6 +576,30 @@ private slots:
         }
     }
 
+    // A preview nobody can see must not burn a core on frames; it catches up when shown again.
+    void hiddenPreviewDoesNoWork() {
+        QTemporaryDir dir;
+        const QString png = dir.path() + "/still.png";
+        QImage still(64, 36, QImage::Format_RGB32);
+        still.fill(Qt::red);
+        QVERIFY(still.save(png));
+
+        QQuickWindow window;
+        window.resize(320, 240);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto *item = new ClipFrameItem(window.contentItem());
+        item->setSize(QSizeF(160, 90));
+
+        item->setVisible(false);
+        item->setImageSource(png);
+        QTest::qWait(600);
+        QVERIFY2(!item->hasFrame(), "a hidden preview processed its source");
+
+        item->setVisible(true);
+        QTRY_VERIFY2_WITH_TIMEOUT(item->hasFrame(), "the preview did not catch up when shown", 5000);
+    }
+
     void dropSnapsToNeighbourEdges() {
         QTemporaryDir dir;
         const QString a = makeSampleVideo(dir.path(), "a.mp4", "blue", 2.0);
