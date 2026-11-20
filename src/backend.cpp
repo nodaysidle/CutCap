@@ -61,7 +61,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
 
     refreshCapabilities();
 
-    // Thumbnails, filmstrips, voiceovers and TTS clips pile up in the cache; sweep them once at
+    // Thumbnails, filmstrips and temporary subtitle files pile up in the cache; sweep them once at
     // start, off the GUI thread. Preview files for a project are regenerated if they are gone.
     (void)QtConcurrent::run([] { MediaEngine::pruneCache(MediaEngine::cacheDir()); });
 
@@ -1437,7 +1437,7 @@ void Backend::toggleVoiceoverRecording() {
         return;
     }
     m_voiceoverStartSec = m_playheadSec;
-    m_voiceoverPath = MediaEngine::cacheDir() + QString("/vo_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
+    m_voiceoverPath = MediaEngine::mediaDir() + QString("/vo_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
     const bool hasPwRecord = !QStandardPaths::findExecutable("pw-record").isEmpty();
     const QString cmd = hasPwRecord ? "pw-record" : "parec";
     QStringList args;
@@ -1460,7 +1460,7 @@ void Backend::generateLocalTts(const QString &text) {
         return;
     }
     setStatus("Synthesizing local TTS...");
-    const QString outPath = MediaEngine::cacheDir() + QString("/tts_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
+    const QString outPath = MediaEngine::mediaDir() + QString("/tts_%1.wav").arg(QDateTime::currentMSecsSinceEpoch());
     const double startSec = m_playheadSec;
 
     const int generation = m_jobGeneration;
@@ -1502,7 +1502,7 @@ void Backend::applyAiBackgroundRemoval(const QString &clipId) {
     if (idx < 0)
         return;
     const TimelineClip clip = m_project.clips[idx];
-    const QString outPath = MediaEngine::cacheDir() + QString("/nobg_%1.png").arg(clip.id);
+    const QString outPath = MediaEngine::mediaDir() + QString("/nobg_%1.png").arg(clip.id);
     setStatus("Running local AI background removal...");
 
     const int generation = m_jobGeneration;

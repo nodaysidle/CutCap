@@ -98,6 +98,13 @@ QString MediaEngine::cacheDir() {
     return dir;
 }
 
+// Recordings and generated media a project depends on; unlike the cache this is never swept.
+QString MediaEngine::mediaDir() {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/media";
+    QDir().mkpath(dir);
+    return dir;
+}
+
 int MediaEngine::pruneCache(const QString &dir, int maxAgeDays, const QStringList &keepPaths) {
     if (dir.isEmpty() || maxAgeDays <= 0)
         return 0;
@@ -105,6 +112,11 @@ int MediaEngine::pruneCache(const QString &dir, int maxAgeDays, const QStringLis
     int removed = 0;
     const QFileInfoList entries = QDir(dir).entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
     for (const QFileInfo &entry : entries) {
+        // Only previews and temporary subtitle files can be rebuilt; anything else in here may be
+        // a recording a saved project still points at.
+        const QString name = entry.fileName();
+        if (!name.startsWith("thumb_") && !name.startsWith("strip_") && !name.startsWith("subs_"))
+            continue;
         if (keepPaths.contains(entry.absoluteFilePath()) || entry.lastModified() >= cutoff)
             continue;
         if (QFile::remove(entry.absoluteFilePath()))

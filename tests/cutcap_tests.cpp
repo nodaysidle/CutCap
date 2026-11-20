@@ -1775,32 +1775,45 @@ private slots:
         QVERIFY2(!dialogue.contains("C:\\new folder"), qPrintable(dialogue));
     }
 
-    // Old cache entries go, recent ones and explicitly kept ones stay.
+    // Only regenerable previews are swept; recordings survive, old previews go, kept and recent stay.
     void testCachePrune() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
-        const QString old = dir.path() + "/tts_old.wav";
-        const QString recent = dir.path() + "/tts_recent.wav";
-        const QString kept = dir.path() + "/thumb_keep.jpg";
-        for (const QString &path : {old, recent, kept}) {
+        const QDateTime monthAgo = QDateTime::currentDateTime().addDays(-30);
+        auto makeFile = [&](const QString &path, bool old) {
             QFile f(path);
             QVERIFY(f.open(QIODevice::WriteOnly));
             f.write("x");
-        }
-        const QDateTime monthAgo = QDateTime::currentDateTime().addDays(-30);
-        QFile oldFile(old);
-        QVERIFY(oldFile.open(QIODevice::ReadWrite));
-        QVERIFY(oldFile.setFileTime(monthAgo, QFileDevice::FileModificationTime));
-        oldFile.close();
-        QFile keptFile(kept);
-        QVERIFY(keptFile.open(QIODevice::ReadWrite));
-        QVERIFY(keptFile.setFileTime(monthAgo, QFileDevice::FileModificationTime));
-        keptFile.close();
+            f.close();
+            if (old) {
+                QFile g(path);
+                QVERIFY(g.open(QIODevice::ReadWrite));
+                QVERIFY(g.setFileTime(monthAgo, QFileDevice::FileModificationTime));
+                g.close();
+            }
+        };
+        const QString voOld = dir.path() + "/vo_old.wav";
+        const QString ttsOld = dir.path() + "/tts_old.wav";
+        const QString nobgOld = dir.path() + "/nobg_old.png";
+        const QString thumbOld = dir.path() + "/thumb_old.jpg";
+        const QString stripOld = dir.path() + "/strip_old.jpg";
+        const QString subsOld = dir.path() + "/subs_old.ass";
+        const QString thumbRecent = dir.path() + "/thumb_recent.jpg";
+        const QString thumbKept = dir.path() + "/thumb_keep.jpg";
+        for (const QString &path : {voOld, ttsOld, nobgOld, thumbOld, stripOld, subsOld, thumbKept})
+            makeFile(path, true);
+        makeFile(thumbRecent, false);
 
-        QCOMPARE(MediaEngine::pruneCache(dir.path(), 7, {kept}), 1);
-        QVERIFY(!QFileInfo::exists(old));
-        QVERIFY(QFileInfo::exists(recent));
-        QVERIFY(QFileInfo::exists(kept));
+        QCOMPARE(MediaEngine::pruneCache(dir.path(), 7, {thumbKept}), 3);
+        QVERIFY(QFileInfo::exists(voOld));
+        QVERIFY(QFileInfo::exists(ttsOld));
+        QVERIFY(QFileInfo::exists(nobgOld));
+        QVERIFY(!QFileInfo::exists(thumbOld));
+        QVERIFY(!QFileInfo::exists(stripOld));
+        QVERIFY(!QFileInfo::exists(subsOld));
+        QVERIFY(QFileInfo::exists(thumbRecent));
+        QVERIFY(QFileInfo::exists(thumbKept));
+        QVERIFY(MediaEngine::mediaDir() != MediaEngine::cacheDir());
     }
 
     void splitAtPlayheadSplitsWholeSelection() {
