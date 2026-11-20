@@ -359,6 +359,31 @@ private slots:
         QVERIFY(joined.contains("libx264"));
     }
 
+    // A still on the audio lane has no sound to give; asking ffmpeg for its audio fails the export.
+    void exportSkipsImageOnAudioTrack() {
+        Project p;
+        TimelineClip video;
+        video.id = "v";
+        video.kind = "video";
+        video.sourcePath = "/tmp/base.mp4";
+        video.track = 0;
+        video.durationSec = 2.0;
+        video.sourceDurationSec = 2.0;
+        p.clips.append(video);
+        TimelineClip still;
+        still.id = "i";
+        still.kind = "image";
+        still.sourcePath = "/tmp/picture.png";
+        still.track = 2;
+        still.durationSec = 2.0;
+        still.sourceDurationSec = 2.0;
+        p.clips.append(still);
+
+        const QStringList args = MediaEngine::buildExportArgs(p, "/tmp/out.mp4", ExportOptions{}, {});
+        QVERIFY2(args.contains("/tmp/base.mp4"), "positive control: the video clip is an input");
+        QVERIFY2(!args.contains("/tmp/picture.png"), qPrintable(args.join(' ')));
+    }
+
     void backendSplitAndUndoRedo() {
         QTemporaryDir dir;
         const QString vid = dir.path() + "/sample.mp4";

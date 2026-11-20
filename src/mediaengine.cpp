@@ -453,12 +453,15 @@ QStringList MediaEngine::buildExportArgs(const Project &project, const QString &
     QList<TimelineClip> overlayClips;
     QList<TimelineClip> audioClips;
     for (const auto &c : project.clips) {
-        if (c.kind == "audio" || c.track == 2)
-            audioClips.append(c);
-        else if (c.track == 1)
+        if (c.kind == "audio" || c.track == 2) {
+            // A still on the audio lane has no audio stream; mapping one would fail the export.
+            if (c.kind != "image")
+                audioClips.append(c);
+        } else if (c.track == 1) {
             overlayClips.append(c);
-        else
+        } else {
             mainVideoClips.append(c);
+        }
     }
     auto byStart = [](const TimelineClip &a, const TimelineClip &b) {
         return a.timelineStartSec < b.timelineStartSec;

@@ -143,6 +143,8 @@ int Cli::run(const QStringList &args) {
         c.name = asset.name;
         c.kind = asset.kind;
         c.track = argValue(args, "--track", asset.kind == "audio" ? "2" : "0").toInt();
+        if (c.kind == "image" && c.track == 2)
+            return failCli("An image cannot go on the audio track (2); use --track 0 or 1.", json);
         const double startArg = argValue(args, "--start", "-1").toDouble();
         c.timelineStartSec = startArg >= 0.0 ? startArg : p.nextTrackEndSec(c.track);
         c.durationSec = asset.durationSec;
