@@ -1,5 +1,4 @@
 #include <QtTest/QtTest>
-#include <QElapsedTimer>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QFile>
@@ -67,8 +66,15 @@ static QQuickItem *findClipBody(QQuickItem *root, const QString &clipId) {
 }
 
 static void collectUnreadableButtons(QQuickItem *item, QStringList *problems, int *inspected = nullptr) {
-    if (!item || !item->isVisible() || item->width() <= 0 || item->height() <= 0)
+    if (!item || !item->isVisible())
         return;
+    if (item->width() <= 0 || item->height() <= 0) {
+        // A button the layout squeezed to nothing is the worst kind of unreadable.
+        if (item->property("labelItem").value<QQuickItem *>() && !item->property("text").toString().isEmpty())
+            problems->append(QString("ActionButton '%1' has no area (%2x%3)")
+                                 .arg(item->property("text").toString()).arg(item->width()).arg(item->height()));
+        return;
+    }
     const QString text = item->property("text").toString();
     if (!text.isEmpty()) {
         if (inspected)
@@ -138,6 +144,17 @@ class CutCapTests : public QObject {
     Q_OBJECT
 
 private slots:
+    // Thumbnails, filmstrips and recordings land in per-run directories, never in the developer's
+    // own ~/.cache or ~/.local/share.
+    void initTestCase() {
+        QVERIFY(m_xdgRoot.isValid());
+        QVERIFY(QDir().mkpath(m_xdgRoot.path() + "/cache"));
+        QVERIFY(QDir().mkpath(m_xdgRoot.path() + "/data"));
+        qputenv("XDG_CACHE_HOME", (m_xdgRoot.path() + "/cache").toUtf8());
+        qputenv("XDG_DATA_HOME", (m_xdgRoot.path() + "/data").toUtf8());
+        QVERIFY(MediaEngine::cacheDir().startsWith(m_xdgRoot.path()));
+    }
+
     void themeReadsOmarchyColorsToml() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
@@ -870,7 +887,7 @@ private slots:
 
         const QImage shot = window->grabWindow();
         QVERIFY(!shot.isNull());
-        QVERIFY(shot.save("/tmp/cutcap_verify.png"));
+        QVERIFY(shot.save(dir.path() + "/cutcap_verify.png"));
 
         QVERIFY2(qmlErrors.isEmpty(), qPrintable(qmlErrors.mid(0, 5).join("\n")));
 
@@ -1335,22 +1352,26 @@ private slots:
         // Desktop-window audit (1280x800).
         window->resize(1280, 800);
         QTest::qWait(350);
+        QCOMPARE(window->size(), QSize(1280, 800));
         auditViewportLayout("1280x800");
         const QImage desktop = window->grabWindow();
         QVERIFY(!desktop.isNull());
-        QVERIFY(desktop.save("/tmp/cutcap_desktop.png"));
+        QVERIFY(desktop.save(dir.path() + "/cutcap_desktop.png"));
 
         // Compact-window audit (900x600): layouts, transport, narrow bin, scrollbars, and dialogs.
         window->resize(900, 600);
         QTest::qWait(400);
+        QCOMPARE(window->size(), QSize(900, 600));
         auditViewportLayout("900x600");
 
         window->resize(880, 580);
         QTest::qWait(400);
+        QCOMPARE(window->size(), QSize(880, 580));
         auditViewportLayout("880x580");
 
         window->resize(780, 500);
         QTest::qWait(400);
+        QCOMPARE(window->size(), QSize(780, 500));
         auditViewportLayout("780x500");
 
         auto *timelineHScroll = findItem(window->contentItem(), "timelineHScroll");
@@ -1365,7 +1386,7 @@ private slots:
 
         const QImage compact = window->grabWindow();
         QVERIFY(!compact.isNull());
-        QVERIFY(compact.save("/tmp/cutcap_compact.png"));
+        QVERIFY(compact.save(dir.path() + "/cutcap_compact.png"));
 
         // Dialog audits inside the 900x600 window: open ExportDialog and ShortcutsDialog, render,
         // verify button labels, containment inside the window, and live estimate updates.
@@ -1392,7 +1413,7 @@ private slots:
         };
 
         QObject *exportDlg = window->findChild<QObject *>("exportDialog");
-        auditDialog(exportDlg, "exportDialog", "/tmp/cutcap_export_dialog.png");
+        auditDialog(exportDlg, "exportDialog", dir.path() + "/cutcap_export_dialog.png");
         auto *exportEst = exportDlg->findChild<QQuickItem *>("exportEstimateText");
         auto *exportResCombo = exportDlg->findChild<QObject *>("exportResCombo");
         auto *exportStartBtn = exportDlg->findChild<QQuickItem *>("exportStartButton");
@@ -1407,7 +1428,7 @@ private slots:
         QTest::qWait(150);
 
         QObject *shortcutsDlg = window->findChild<QObject *>("shortcutsDialog");
-        auditDialog(shortcutsDlg, "shortcutsDialog", "/tmp/cutcap_shortcuts_dialog.png");
+        auditDialog(shortcutsDlg, "shortcutsDialog", dir.path() + "/cutcap_shortcuts_dialog.png");
         QVERIFY(QMetaObject::invokeMethod(shortcutsDlg, "close"));
         QTest::qWait(150);
     }
@@ -2098,11 +2119,12 @@ private slots:
         QVERIFY(!vid.isEmpty());
 
         Backend b;
-        QElapsedTimer timer;
-        timer.start();
         b.importSingleMedia(vid);
-        const qint64 elapsedMs = timer.elapsed();
-        QVERIFY2(elapsedMs < 200, qPrintable(QString("importSingleMedia blocked the GUI for %1 ms").arg(elapsedMs)));
+        // Asynchronous means the call has returned while the probe is still running: the job is
+        // counted and nothing has reached the bin or the timeline yet.
+        QVERIFY2(b.importing() > 0, "importSingleMedia finished the import before returning");
+        QVERIFY2(b.assetsList().isEmpty() && b.clipsList().isEmpty(),
+                 "importSingleMedia added the asset before returning");
 
         QTRY_VERIFY_WITH_TIMEOUT(b.clipsList().size() == 1, 30000);
         QVERIFY(std::abs(b.clipsList().first().toMap().value("durationSec").toDouble() - 10.0) < 0.2);
@@ -2197,6 +2219,9 @@ private slots:
         waitForImports(b);
         QCOMPARE(b.clipsList().size(), 1);
     }
+
+private:
+    QTemporaryDir m_xdgRoot;
 };
 
 // Video textures, MultiEffect and shapes need an RHI scene graph; the offscreen platform otherwise
