@@ -12,7 +12,7 @@ ApplicationWindow {
     visible: true
     width: 1440
     height: 900
-    minimumWidth: 780
+    minimumWidth: 800
     minimumHeight: 500
     title: Backend.projectTitle + (Backend.dirty ? " *" : "") + " — CutCap"
     color: Design.surfaceSunken
@@ -43,6 +43,11 @@ ApplicationWindow {
     property var pendingDiscard: null
     property var pendingSave: null
     property bool allowClose: false
+
+    // A tiled window can be narrower than minimumWidth: the compositor ignores that hint. The
+    // viewer and timeline are the editor; the side panels step aside when they do not fit.
+    readonly property bool showInspector: width >= 800
+    readonly property bool showMediaBin: width >= 560
 
     function urlsReplaceProject(urls) {
         for (let i = 0; i < urls.length; ++i) {
@@ -533,9 +538,9 @@ ApplicationWindow {
                         else saveProjectDialog.open()
                     }
                 }
-                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
-                ActionButton { text: "Undo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canUndo; onClicked: Backend.undo() }
-                ActionButton { text: "Redo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canRedo; onClicked: Backend.redo() }
+                Rectangle { visible: win.width >= 560; Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
+                ActionButton { visible: win.width >= 560; text: "Undo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canUndo; onClicked: Backend.undo() }
+                ActionButton { visible: win.width >= 560; text: "Redo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canRedo; onClicked: Backend.redo() }
 
                 Item {
                     Layout.fillWidth: true
@@ -545,6 +550,7 @@ ApplicationWindow {
                 Text {
                     id: topBarStatus
                     objectName: "topBarStatus"
+                    visible: win.width >= 800
                     text: Backend.statusMessage
                     color: Design.textSecondary
                     font.family: Design.fontMono
@@ -593,63 +599,68 @@ ApplicationWindow {
             }
         }
 
-        // Main Workspace: Media Bin | Preview | Inspector
+        // Workspace over timeline; the handle between them trades viewer height for timeline height.
         SplitView {
+            objectName: "workspaceSplit"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: Qt.Horizontal
+            orientation: Qt.Vertical
 
-            MediaBinPanel {
-                objectName: "mediaBinPanel"
-                onImportRequested: importDialog.open()
-                SplitView.preferredWidth: 272
-                SplitView.minimumWidth: 200
-                SplitView.maximumWidth: 400
-            }
-
-            // 1px seams are the structure: no cards, no rounded panels.
-            Rectangle {
-                SplitView.preferredWidth: Design.gutter
+            // Main Workspace: Media Bin | Preview | Inspector
+            SplitView {
                 SplitView.fillHeight: true
-                color: Design.borderHairline
+                SplitView.minimumHeight: 140
+                orientation: Qt.Horizontal
+
+                MediaBinPanel {
+                    objectName: "mediaBinPanel"
+                    visible: win.showMediaBin
+                    onImportRequested: importDialog.open()
+                    SplitView.preferredWidth: 272
+                    SplitView.minimumWidth: 200
+                    SplitView.maximumWidth: 400
+                }
+
+                // 1px seams are the structure: no cards, no rounded panels.
+                Rectangle {
+                    visible: win.showMediaBin
+                    SplitView.preferredWidth: Design.gutter
+                    SplitView.fillHeight: true
+                    color: Design.borderHairline
+                }
+
+                PreviewPanel {
+                    objectName: "previewPanel"
+                    onImportRequested: importDialog.open()
+                    SplitView.fillWidth: true
+                    SplitView.minimumWidth: 340
+                }
+
+                Rectangle {
+                    visible: win.showInspector
+                    SplitView.preferredWidth: Design.gutter
+                    SplitView.fillHeight: true
+                    color: Design.borderHairline
+                }
+
+                InspectorPanel {
+                    objectName: "inspectorPanel"
+                    visible: win.showInspector
+                    onSrtImportRequested: importSrtDialog.open()
+                    onSrtExportRequested: exportSrtDialog.open()
+                    SplitView.preferredWidth: 320
+                    SplitView.minimumWidth: 230
+                    SplitView.maximumWidth: 440
+                }
             }
 
-            PreviewPanel {
-                objectName: "previewPanel"
-                onImportRequested: importDialog.open()
-                SplitView.fillWidth: true
-                SplitView.minimumWidth: 340
+            TimelinePanel {
+                id: timelinePanel
+                objectName: "timelinePanel"
+                // Starts at about a third of the window so a short tile still shows the picture.
+                SplitView.preferredHeight: Math.max(180, Math.min(278, Math.round(win.height * 0.36)))
+                SplitView.minimumHeight: 180
             }
-
-            Rectangle {
-                SplitView.preferredWidth: Design.gutter
-                SplitView.fillHeight: true
-                color: Design.borderHairline
-            }
-
-            InspectorPanel {
-                objectName: "inspectorPanel"
-                onSrtImportRequested: importSrtDialog.open()
-                onSrtExportRequested: exportSrtDialog.open()
-                SplitView.preferredWidth: 320
-                SplitView.minimumWidth: 230
-                SplitView.maximumWidth: 440
-            }
-        }
-
-        // Bottom Timeline
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Design.gutter
-            color: Design.borderHairline
-        }
-
-        TimelinePanel {
-            id: timelinePanel
-            objectName: "timelinePanel"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 278
-            Layout.minimumHeight: 180
         }
     }
 }

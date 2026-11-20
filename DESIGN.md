@@ -150,6 +150,11 @@ not hand-write `rgba(...)` literals.
   for buttons that own a surface, not for the command strip.
 - **Custom controls are controls, not mouse areas.** Lane toggles, color swatches, transition chips
   and reset actions expose a role and name, take tab focus, and activate with Space/Return.
+- **Tiled sizes are first-class.** A tiling compositor ignores the window minimum (800 × 500). The
+  timeline starts at about a third of the window height and its top edge is a split handle; below
+  800 px wide the inspector and the top-bar status text hide; below 560 px the media bin, Undo and
+  Redo hide too. `layoutSurvivesTiledSizes` audits 1273×697, 2550×697, 800×500, 780×500, 848×466, 640×697 and
+  520×697.
 
 ---
 

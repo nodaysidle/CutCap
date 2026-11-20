@@ -1369,10 +1369,10 @@ private slots:
         QCOMPARE(window->size(), QSize(880, 580));
         auditViewportLayout("880x580");
 
-        window->resize(780, 500);
+        window->resize(800, 500);
         QTest::qWait(400);
-        QCOMPARE(window->size(), QSize(780, 500));
-        auditViewportLayout("780x500");
+        QCOMPARE(window->size(), QSize(800, 500));
+        auditViewportLayout("800x500");
 
         auto *timelineHScroll = findItem(window->contentItem(), "timelineHScroll");
         QVERIFY2(timelineHScroll, "timeline must have a horizontal scrollbar");
@@ -2025,6 +2025,82 @@ private slots:
         QTest::qWait(200);
         QVERIFY2(!window->isVisible(), "Discard must close the window");
         QVERIFY2(backend.dirty(), "Discard must not save the project");
+    }
+
+    void layoutSurvivesTiledSizes() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "tiles.mp4", "0x336699", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+
+        struct Tile { int w; int h; bool bin; bool inspector; };
+        // Sizes Hyprland produces on a 2560x1440 monitor, plus the documented floating minimum.
+        const QList<Tile> tiles{{1273, 697, true, true}, {2550, 697, true, true}, {800, 500, true, true},
+                                {780, 500, true, false}, {848, 466, true, true},  {640, 697, true, false},
+                                {520, 697, false, false}};
+        for (const Tile &t : tiles) {
+            const QString label = QString("%1x%2").arg(t.w).arg(t.h);
+            window->setGeometry(0, 0, t.w, t.h);
+            QTest::qWait(400);
+            QCOMPARE(window->size(), QSize(t.w, t.h));
+            const QRectF win(0, 0, t.w, t.h);
+
+            auto *bin = findItem(window->contentItem(), "mediaBinPanel");
+            auto *inspector = findItem(window->contentItem(), "inspectorPanel");
+            QVERIFY2(bin && inspector, qPrintable(label + ": side panels missing"));
+            QVERIFY2(bin->isVisible() == t.bin, qPrintable(label + ": media bin visibility"));
+            QVERIFY2(inspector->isVisible() == t.inspector, qPrintable(label + ": inspector visibility"));
+
+            int visiblePanels = 0;
+            for (const char *name : {"topBar", "mediaBinPanel", "previewPanel", "inspectorPanel", "timelinePanel", "exportButton"}) {
+                auto *item = findItem(window->contentItem(), name);
+                QVERIFY2(item, qPrintable(label + ": missing " + name));
+                if (!item->isVisible())
+                    continue;
+                ++visiblePanels;
+                const QRectF r(item->mapToScene(QPointF(0, 0)), QSizeF(item->width(), item->height()));
+                QVERIFY2(r.width() > 0 && r.height() > 0, qPrintable(QString("%1: %2 has no area").arg(label, name)));
+                QVERIFY2(win.contains(r.adjusted(1, 1, -1, -1)),
+                         qPrintable(QString("%1: %2 (%3,%4 %5x%6) leaves the window")
+                                        .arg(label, name).arg(r.x()).arg(r.y()).arg(r.width()).arg(r.height())));
+            }
+            QVERIFY2(visiblePanels >= 4, qPrintable(label + ": too few panels inspected"));
+
+            auto *canvas = findItem(window->contentItem(), "previewCanvas");
+            QVERIFY2(canvas, qPrintable(label + ": previewCanvas missing"));
+            QVERIFY2(canvas->height() >= 100,
+                     qPrintable(QString("%1: the viewer picture is only %2 px tall").arg(label).arg(canvas->height())));
+
+            QStringList problems;
+            int inspected = 0;
+            collectUnreadableButtons(window->contentItem(), &problems, &inspected);
+            QVERIFY2(problems.isEmpty(), qPrintable(label + ": " + problems.join("\n")));
+            QVERIFY2(inspected >= 8, qPrintable(label + ": too few labelled controls inspected"));
+        }
     }
 
     // Modal dialogs swallow the editing keys. Space activates a control only when the keyboard
