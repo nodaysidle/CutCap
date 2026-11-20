@@ -721,6 +721,92 @@ private slots:
         QCOMPARE(b.statusMessage(), QString("Export cancelled"));
     }
 
+    // An export that dies with the app must not leave a truncated file that looks like a video.
+    void testQuitDuringExportRemovesPartial() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "long.mp4", "0x224466", 8.0);
+        QVERIFY(!vid.isEmpty());
+        const QString out = dir.path() + "/partial.mp4";
+        {
+            Backend b;
+            QTRY_VERIFY_WITH_TIMEOUT(b.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
+            b.importSingleMedia(vid);
+            waitForImports(b);
+            b.startExport(out, "high", "h264", "project");
+            QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(out), 20000);
+            QVERIFY2(b.exporting(), "the export finished before the app was closed");
+        }
+        QVERIFY2(!QFileInfo::exists(out), "quitting mid-export left a partial output file");
+    }
+
+    void testCloseAsksWhileExporting() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "src.mp4", "0x224466", 8.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QTRY_VERIFY_WITH_TIMEOUT(backend.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        // Saved, so the unsaved-changes guard is out of the way and only the running export counts.
+        QVERIFY(backend.saveProject(dir.path() + "/busy.cutcap"));
+        QVERIFY(!backend.dirty());
+
+        const QString out = dir.path() + "/busy.mp4";
+        backend.startExport(out, "high", "h264", "project");
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(out), 20000);
+        QVERIFY2(backend.exporting(), "the export finished before the window was closed");
+
+        window->close();
+        QTest::qWait(300);
+        QVERIFY2(window->isVisible(), "closing during an export must ask first");
+        auto *dialog = window->findChild<QObject *>("busyCloseDialog");
+        QVERIFY2(dialog, "the still-working dialog does not exist");
+        QVERIFY2(dialog->property("opened").toBool(), "the still-working dialog did not open");
+
+        // Keep working: the dialog goes away, the window and the export stay.
+        auto *keepButton = window->findChild<QObject *>("busyKeepButton");
+        QVERIFY2(keepButton, "the Keep working button does not exist");
+        QVERIFY(QMetaObject::invokeMethod(keepButton, "clicked"));
+        QTest::qWait(200);
+        QVERIFY(window->isVisible());
+        QVERIFY2(backend.exporting(), "Keep working must not stop the export");
+
+        // Quit anyway: the window closes.
+        window->close();
+        QTest::qWait(300);
+        QVERIFY(window->isVisible());
+        auto *quitButton = window->findChild<QObject *>("busyQuitButton");
+        QVERIFY2(quitButton, "the Quit anyway button does not exist");
+        QVERIFY(QMetaObject::invokeMethod(quitButton, "clicked"));
+        QTest::qWait(300);
+        QVERIFY2(!window->isVisible(), "Quit anyway must close the window");
+        backend.cancelExport();
+    }
+
     void previewSnapExposesGuide() {
         QTemporaryDir dir;
         const QString vid = makeSampleVideo(dir.path(), "snap.mp4", "teal", 2.0);

@@ -125,6 +125,9 @@ Backend::~Backend() {
     if (m_exportProcess.state() != QProcess::NotRunning) {
         m_exportProcess.kill();
         m_exportProcess.waitForFinished(1000);
+        // Same rule as a cancelled export: a half-written file must not pass for a finished video.
+        // Same rule as a cancelled export: a half-written file must not pass for a finished video.
+        QFile::remove(m_exportOutputPath);
     }
     if (m_voiceoverProcess.state() != QProcess::NotRunning) {
         m_voiceoverProcess.terminate();

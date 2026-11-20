@@ -33,7 +33,7 @@ ApplicationWindow {
 
     // Qt does not block application shortcuts while a modal popup or a native file dialog is
     // open, so the editing shortcuts check for one themselves.
-    readonly property bool modalOpen: exportDialog.opened || shortcutsDialog.opened || discardDialog.opened ||
+    readonly property bool modalOpen: exportDialog.opened || shortcutsDialog.opened || discardDialog.opened || busyCloseDialog.opened ||
         importDialog.visible || saveProjectDialog.visible || openProjectDialog.visible ||
         importSrtDialog.visible || exportSrtDialog.visible
     readonly property bool keysFree: !isTyping && !modalOpen
@@ -43,6 +43,9 @@ ApplicationWindow {
     property var pendingDiscard: null
     property var pendingSave: null
     property bool allowClose: false
+    // Closing mid-export kills ffmpeg, and a recording or job in flight is lost, so those ask too.
+    property bool allowBusyClose: false
+    readonly property bool workRunning: Backend.exporting || Backend.recordingVoiceover || Backend.busy
 
     // A tiled window can be narrower than minimumWidth: the compositor ignores that hint. The
     // viewer and timeline are the editor; the side panels step aside when they do not fit.
@@ -77,6 +80,11 @@ ApplicationWindow {
     }
 
     onClosing: (close) => {
+        if (workRunning && !allowBusyClose) {
+            close.accepted = false
+            busyCloseDialog.open()
+            return
+        }
         if (allowClose || !Backend.dirty)
             return
         close.accepted = false
@@ -365,6 +373,78 @@ ApplicationWindow {
                         discardDialog.close()
                         win.saveThenRun(action)
                     }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: busyCloseDialog
+        objectName: "busyCloseDialog"
+        title: "Still working"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(420, win.width - Design.s6 * 2)
+        padding: Design.s5
+
+        Material.theme: Theme.darkMode ? Material.Dark : Material.Light
+        Material.accent: Design.accent
+        Material.background: Design.surfaceOverlay
+        Material.foreground: Design.textPrimary
+
+        background: Rectangle {
+            color: Design.surfaceOverlay
+            radius: Design.rLg
+            border.color: Design.borderStrong
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Design.s4
+
+            Text {
+                Layout.fillWidth: true
+                text: Backend.exporting ? "An export is still running." : (Backend.recordingVoiceover ? "A voiceover is still recording." : "A background job is still running.")
+                color: Design.textPrimary
+                font.pixelSize: Design.tBody
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Quitting now stops it and discards its result."
+                color: Design.textSecondary
+                font.pixelSize: Design.tCaption
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s3
+
+                Item { Layout.fillWidth: true }
+
+                ActionButton {
+                    objectName: "busyQuitButton"
+                    text: "Quit anyway"
+                    fontPixelSize: Design.tBody
+                    horizontalPadding: Design.s5
+                    verticalPadding: Design.s2
+                    onClicked: {
+                        busyCloseDialog.close()
+                        win.allowBusyClose = true
+                        win.close()
+                    }
+                }
+
+                ActionButton {
+                    objectName: "busyKeepButton"
+                    text: "Keep working"
+                    highlighted: true
+                    fontPixelSize: Design.tBody
+                    horizontalPadding: Design.s5
+                    verticalPadding: Design.s2
+                    onClicked: busyCloseDialog.close()
                 }
             }
         }
