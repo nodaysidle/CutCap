@@ -335,6 +335,142 @@ private slots:
         QCOMPARE(loaded.texts.size(), 1);
     }
 
+    // Every declared field is set away from its default and inside its clamp range, so a field that
+    // is written but not read back (or the reverse) changes the JSON and fails the comparison.
+    void projectFileKeepsEveryField() {
+        Project p;
+        p.title = "Every Field";
+        p.width = 1280;
+        p.height = 720;
+        p.fps = 25.0;
+        p.lanes[1].muted = true;
+        p.lanes[2].locked = true;
+
+        MediaAsset a;
+        a.id = "asset_1";
+        a.path = "/tmp/every.png";
+        a.name = "every.png";
+        a.kind = "image";
+        a.durationSec = 7.5;
+        a.width = 1280;
+        a.height = 720;
+        a.fps = 25.0;
+        a.hasAudio = false;
+        a.thumbnailPath = "/tmp/every-thumb.jpg";
+        a.filmstripPath = "/tmp/every-strip.jpg";
+        a.waveformPeaks = {0.1, 0.5};
+        p.assets.append(a);
+
+        TimelineClip c;
+        c.id = "clip_1";
+        c.assetId = "asset_1";
+        c.sourcePath = "/tmp/every.png";
+        c.name = "every clip";
+        c.kind = "audio";
+        c.track = 1;
+        c.timelineStartSec = 2.0;
+        c.sourceInSec = 0.5;
+        c.durationSec = 4.0;
+        c.sourceDurationSec = 9.0;
+        c.speed = 2.0;
+        c.volume = 1.5;
+        c.muted = true;
+        c.brightness = 0.2;
+        c.contrast = 1.4;
+        c.saturation = 0.6;
+        c.blur = 3.0;
+        c.vignette = true;
+        c.transitionIn = "fade";
+        c.transitionDurationSec = 1.0;
+        c.audioDenoise = true;
+        c.audioVoiceClarity = true;
+        c.audioNormalize = true;
+        c.audioCompress = true;
+        c.bgRemovalMode = "chromakey";
+        c.chromaColor = "#112233";
+        c.chromaSimilarity = 0.3;
+        c.chromaBlend = 0.2;
+        c.processedPath = "/tmp/every-processed.mp4";
+        Keyframe k;
+        k.timeSec = 0.5;
+        k.x = 0.3;
+        k.y = 0.7;
+        k.scale = 1.5;
+        k.opacity = 0.8;
+        k.rotation = 45.0;
+        c.keyframes.append(k);
+        p.clips.append(c);
+
+        TextOverlay t;
+        t.id = "text_1";
+        t.text = "Every field";
+        t.isCaption = true;
+        t.startSec = 1.5;
+        t.durationSec = 2.5;
+        t.x = 0.2;
+        t.y = 0.1;
+        t.fontSize = 60;
+        t.color = "#ff8800";
+        t.bgColor = "#102030";
+        t.bgOpacity = 0.4;
+        t.bold = false;
+        p.texts.append(t);
+
+        // If a count changes a field was added or removed: set it above, then update the number.
+        QCOMPARE(a.toJson().keys().size(), 12);
+        QCOMPARE(c.toJson().keys().size(), 30);
+        QCOMPARE(t.toJson().keys().size(), 12);
+
+        QTemporaryDir dir;
+        const QString path = dir.path() + "/full.cutcap";
+        QVERIFY(p.saveToFile(path));
+        bool ok = false;
+        const Project loaded = Project::loadFromFile(path, &ok);
+        QVERIFY(ok);
+        QCOMPARE(loaded.toJson(), p.toJson());
+    }
+
+    // Save through the app, reopen in a fresh Backend, and check the edit came back intact.
+    void backendSaveAndOpenRoundTrip() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "round.mp4", "0x225577", 3.0);
+        QVERIFY(!vid.isEmpty());
+        const QString path = dir.path() + "/round.cutcap";
+        QStringList clipIds;
+        {
+            Backend b;
+            b.importSingleMedia(vid);
+            waitForImports(b);
+            b.setPlayheadSec(1.0);
+            b.splitAtPlayhead();
+            b.addTextAtPlayhead("Round trip");
+            b.setProjectTitle("Saved Edit");
+            QCOMPARE(b.clipsList().size(), 2);
+            QCOMPARE(b.textsList().size(), 1);
+            QVERIFY(b.dirty());
+            QVERIFY(b.saveProject(path));
+            QVERIFY(!b.dirty());
+            for (const QVariant &c : b.clipsList())
+                clipIds << c.toMap().value("id").toString();
+        }
+        Backend b;
+        QVERIFY(b.openProject(path));
+        QVERIFY(!b.dirty());
+        QCOMPARE(b.projectTitle(), QString("Saved Edit"));
+        QCOMPARE(b.clipsList().size(), 2);
+        QStringList reopened;
+        for (const QVariant &c : b.clipsList())
+            reopened << c.toMap().value("id").toString();
+        QCOMPARE(reopened, clipIds);
+        QCOMPARE(b.textsList().size(), 1);
+        QCOMPARE(b.textsList().first().toMap().value("text").toString(), QString("Round trip"));
+        waitForImports(b);
+        QCOMPARE(b.assetsList().size(), 1);
+        QVERIFY2(!b.assetsList().first().toMap().value("thumbnailPath").toString().isEmpty(),
+                 "a reopened project must get its previews back");
+        QVERIFY(!b.canUndo());
+    }
+
     void exportArgsContainFiltersAndSubtitles() {
         Project p;
         TimelineClip c;
@@ -798,6 +934,52 @@ private slots:
         QCOMPARE(result.value(1).toString(), QString("cancelled"));
         QVERIFY2(!QFileInfo::exists(out), "cancel must remove the partial output");
         QCOMPARE(b.statusMessage(), QString("Export cancelled"));
+    }
+
+    // An export that runs to the end must say so, write a playable file of the right length, and
+    // honour the vertical resolution preset.
+    void exportFinishesAndPlays() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "finish.mp4", "0x336699", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        QTRY_VERIFY_WITH_TIMEOUT(b.capabilities().value("encoders").toMap().value("h264").toBool(), 15000);
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        b.addTextAtPlayhead("Burned in");
+        // An export runs as long as the longest item on the timeline. Backend::totalDuration() has a
+        // 10 s floor, so the longest end is taken from the clip and text lists instead.
+        double expected = 0.0;
+        for (const QVariant &c : b.clipsList())
+            expected = std::max(expected, c.toMap().value("timelineStartSec").toDouble() + c.toMap().value("durationSec").toDouble());
+        for (const QVariant &t : b.textsList())
+            expected = std::max(expected, t.toMap().value("startSec").toDouble() + t.toMap().value("durationSec").toDouble());
+        QVERIFY2(expected >= 2.0, "the timeline is shorter than its clip");
+
+        for (const QString &preset : {QString("project"), QString("vertical")}) {
+            const QString out = dir.path() + "/finish-" + preset + ".mp4";
+            QSignalSpy finished(&b, &Backend::exportFinished);
+            b.startExport(out, "fast", "h264", preset);
+            QTRY_VERIFY_WITH_TIMEOUT(finished.count() == 1, 120000);
+
+            const QList<QVariant> result = finished.takeFirst();
+            QCOMPARE(result.value(0).toBool(), true);
+            QVERIFY2(result.value(1).toString().startsWith("Saved to "), qPrintable(result.value(1).toString()));
+            QVERIFY2(QFileInfo::exists(out), qPrintable(out));
+            QVERIFY2(QFileInfo(out).size() > 1000, qPrintable(preset + " output is too small"));
+            QVERIFY2(std::abs(probeDurationSec(out) - expected) < 0.3, qPrintable(preset + " duration is off"));
+            QVERIFY(!b.exporting());
+            QCOMPARE(b.exportProgress(), 1.0);
+
+            if (preset == "vertical") {
+                QProcess p;
+                p.start("ffprobe", {"-v", "error", "-select_streams", "v:0", "-show_entries",
+                                    "stream=width,height", "-of", "csv=p=0", out});
+                QVERIFY(p.waitForFinished(10000));
+                QCOMPARE(QString::fromUtf8(p.readAllStandardOutput()).trimmed(), QString("1080,1920"));
+            }
+        }
     }
 
     // An export that dies with the app must not leave a truncated file that looks like a video.
@@ -1640,6 +1822,47 @@ private slots:
                  (QStringList{"/tmp/a.mp4", "/tmp/b.cutcap"}));
         QCOMPARE(Cli::guiFiles({"cutcap", "/tmp/a.mp4"}), (QStringList{"/tmp/a.mp4"}));
         QCOMPARE(Cli::guiFiles({"cutcap", "open", "--help"}), QStringList{});
+    }
+
+    // Every headless command runs against a real project file, and the failure paths leave it alone.
+    void cliCommandsWorkEndToEnd() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "cli.mp4", "0x774411", 2.0);
+        QVERIFY(!vid.isEmpty());
+        const QString proj = dir.path() + "/cli.cutcap";
+        const QString out = dir.path() + "/cli.mp4.out.mp4";
+
+        QCOMPARE(Cli::run({"cutcap", "new", proj, "--title", "CLI Edit"}), 0);
+        QCOMPARE(Cli::run({"cutcap", "add-clip", proj, vid}), 0);
+        bool ok = false;
+        Project p = Project::loadFromFile(proj, &ok);
+        QVERIFY(ok);
+        QCOMPARE(p.title, QString("CLI Edit"));
+        QCOMPARE(p.clips.size(), 1);
+
+        QCOMPARE(Cli::run({"cutcap", "split", proj, p.clips.first().id, "1.0"}), 0);
+        QCOMPARE(Cli::run({"cutcap", "add-text", proj, "--text", "From the CLI", "--start", "0", "--duration", "1"}), 0);
+        p = Project::loadFromFile(proj, &ok);
+        QVERIFY(ok);
+        QCOMPARE(p.clips.size(), 2);
+        QCOMPARE(p.texts.size(), 1);
+
+        QCOMPARE(Cli::run({"cutcap", "export", proj, out, "--preset", "fast"}), 0);
+        QVERIFY(QFileInfo::exists(out));
+        QVERIFY(std::abs(probeDurationSec(out) - 2.0) < 0.3);
+
+        // Error paths return 1 and change nothing.
+        QCOMPARE(Cli::run({"cutcap", "frobnicate"}), 1);
+        QCOMPARE(Cli::run({"cutcap", "probe"}), 1);
+        QCOMPARE(Cli::run({"cutcap", "add-clip", proj, dir.path() + "/missing.mp4"}), 1);
+        const QString png = dir.path() + "/still.png";
+        QImage still(64, 36, QImage::Format_RGB32);
+        still.fill(Qt::blue);
+        QVERIFY(still.save(png));
+        QCOMPARE(Cli::run({"cutcap", "add-clip", proj, png, "--track", "2"}), 1);
+        p = Project::loadFromFile(proj, &ok);
+        QVERIFY(ok);
+        QCOMPARE(p.clips.size(), 2);
     }
 
     void transitionBetweenAdjacentClips() {
