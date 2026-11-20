@@ -127,6 +127,13 @@ Rectangle {
         property string label: ""
         property bool selected: false
         signal picked()
+        // Space is play/pause everywhere, except on a control the keyboard moved focus to.
+        property bool focusFromMouse: false
+        onFocusChanged: if (!focus) focusFromMouse = false
+        Keys.onShortcutOverride: (event) => {
+            if (event.key === Qt.Key_Space && !swatch.focusFromMouse)
+                event.accepted = true
+        }
 
         width: Design.hCompact
         height: Design.hCompact
@@ -156,6 +163,7 @@ Rectangle {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onClicked: {
+                swatch.focusFromMouse = true
                 swatch.forceActiveFocus()
                 swatch.picked()
             }
@@ -203,6 +211,13 @@ Rectangle {
                     color: section.expanded ? Design.textPrimary : Design.borderStrong
                 }
 
+                // Space is play/pause everywhere, except on a control the keyboard moved focus to.
+                property bool focusFromMouse: false
+                onFocusChanged: if (!focus) focusFromMouse = false
+                Keys.onShortcutOverride: (event) => {
+                    if (event.key === Qt.Key_Space && !headerBar.focusFromMouse)
+                        event.accepted = true
+                }
                 Keys.onSpacePressed: section.expanded = !section.expanded
                 Keys.onReturnPressed: section.expanded = !section.expanded
 
@@ -219,6 +234,7 @@ Rectangle {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            headerBar.focusFromMouse = true
                             headerBar.forceActiveFocus()
                             section.expanded = !section.expanded
                         }

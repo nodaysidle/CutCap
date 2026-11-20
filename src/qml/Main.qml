@@ -31,6 +31,13 @@ ApplicationWindow {
          activeFocusItem.toString().indexOf("TextArea") !== -1 ||
          activeFocusItem.toString().indexOf("TextField") !== -1)
 
+    // Qt does not block application shortcuts while a modal popup or a native file dialog is
+    // open, so the editing shortcuts check for one themselves.
+    readonly property bool modalOpen: exportDialog.opened || shortcutsDialog.opened || discardDialog.opened ||
+        importDialog.visible || saveProjectDialog.visible || openProjectDialog.visible ||
+        importSrtDialog.visible || exportSrtDialog.visible
+    readonly property bool keysFree: !isTyping && !modalOpen
+
     // Quit, Open, Import and a dropped .cutcap all replace the timeline, so each asks first when
     // the project has unsaved edits.
     property var pendingDiscard: null
@@ -165,70 +172,73 @@ ApplicationWindow {
     // Keyboard shortcuts
     Shortcut {
         sequence: "Ctrl+A"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.selectAllClips()
     }
     Shortcut {
         sequence: "Escape"
-        enabled: !win.isTyping && !exportDialog.opened && !shortcutsDialog.opened &&
-                 !importDialog.visible && !saveProjectDialog.visible &&
-                 !openProjectDialog.visible && !importSrtDialog.visible && !exportSrtDialog.visible
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.clearClipSelection()
     }
     Shortcut {
         sequence: "Space"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.playing = !Backend.playing
     }
     Shortcut {
         sequence: "S"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.splitAtPlayhead()
     }
     Shortcut {
         sequence: "Ctrl+B"
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: Backend.splitAtPlayhead()
     }
     Shortcut {
         sequence: "Delete"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.deleteSelected(false)
     }
     Shortcut {
         sequence: "Backspace"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.deleteSelected(false)
     }
     Shortcut {
         sequence: "Shift+Delete"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.deleteSelected(true)
     }
     Shortcut {
         sequences: [StandardKey.Undo]
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: Backend.undo()
     }
     Shortcut {
         sequences: [StandardKey.Redo]
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: Backend.redo()
     }
     Shortcut {
         sequence: "Ctrl+O"
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: importDialog.open()
     }
     Shortcut {
         sequence: "Ctrl+S"
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: {
             if (Backend.projectPath.length > 0) Backend.saveProject()
@@ -237,24 +247,25 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Ctrl+E"
+        enabled: !win.modalOpen
         context: Qt.ApplicationShortcut
         onActivated: exportDialog.open()
     }
     Shortcut {
         sequence: "Left"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.playheadSec = Math.max(0, Backend.playheadSec - 0.1)
     }
     Shortcut {
         sequence: "Right"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: Backend.playheadSec = Backend.playheadSec + 0.1
     }
     Shortcut {
         sequence: "?"
-        enabled: !win.isTyping
+        enabled: win.keysFree
         context: Qt.ApplicationShortcut
         onActivated: shortcutsDialog.open()
     }

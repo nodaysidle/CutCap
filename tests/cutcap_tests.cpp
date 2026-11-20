@@ -1953,6 +1953,90 @@ private slots:
         QVERIFY2(backend.dirty(), "Discard must not save the project");
     }
 
+    // Modal dialogs swallow the editing keys. Space activates a control only when the keyboard
+    // moved focus there; for everything else it is play/pause.
+    void testShortcutsRespectModalsAndFocus() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "keys.mp4", "0x663399", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        QCOMPARE(backend.clipsList().size(), 1);
+        window->requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(window));
+        backend.setPlayheadSec(1.0);
+
+        auto *exportDialog = window->findChild<QObject *>("exportDialog");
+        QVERIFY2(exportDialog, "the export dialog does not exist");
+
+        // A modal dialog swallows the editing keys.
+        QVERIFY(QMetaObject::invokeMethod(exportDialog, "open"));
+        QTRY_VERIFY(exportDialog->property("opened").toBool());
+        QTest::keyClick(window, Qt::Key_S);
+        QTest::keyClick(window, Qt::Key_Delete);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTest::qWait(200);
+        QCOMPARE(backend.clipsList().size(), 1);
+        QVERIFY2(!backend.playing(), "Space reached the transport behind a modal dialog");
+        QVERIFY(QMetaObject::invokeMethod(exportDialog, "close"));
+        QTRY_VERIFY(!exportDialog->property("opened").toBool());
+
+        // Positive control: with no dialog the same key does reach the timeline.
+        QTest::keyClick(window, Qt::Key_S);
+        QTRY_COMPARE(backend.clipsList().size(), 2);
+
+        // Keyboard focus on a button: Space presses the button, it does not start playback.
+        auto *exportButton = window->findChild<QQuickItem *>("exportButton");
+        QVERIFY2(exportButton, "the Export button does not exist");
+        exportButton->forceActiveFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(exportButton->hasActiveFocus());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(exportDialog->property("opened").toBool());
+        QVERIFY2(!backend.playing(), "Space on a keyboard-focused button started playback");
+        QVERIFY(QMetaObject::invokeMethod(exportDialog, "close"));
+        QTRY_VERIFY(!exportDialog->property("opened").toBool());
+
+        // Focus that came from a click: Space is still play/pause.
+        const QPoint centre = exportButton->mapToScene(QPointF(exportButton->width() / 2,
+                                                               exportButton->height() / 2)).toPoint();
+        // "opened" drops at close(), but the exit transition keeps the modal overlay up and would
+        // swallow the click, so wait until the dialog is hidden.
+        QTRY_VERIFY(!exportDialog->property("visible").toBool());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, centre);
+        QTRY_VERIFY(exportDialog->property("opened").toBool());
+        QVERIFY(QMetaObject::invokeMethod(exportDialog, "close"));
+        QTRY_VERIFY(!exportDialog->property("opened").toBool());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY2(backend.playing(), "Space after a mouse click must still play");
+        QVERIFY(!exportDialog->property("opened").toBool());
+        backend.setPlaying(false);
+    }
+
     // Media I/O must not block the GUI thread: the call returns at once and the asset, its real
     // duration and its previews arrive afterwards.
     void testImportIsAsync() {

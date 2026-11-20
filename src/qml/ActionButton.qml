@@ -25,6 +25,15 @@ Rectangle {
 
     signal clicked()
 
+    // Space is play/pause everywhere, except on a control the keyboard moved focus to. A click
+    // also focuses the control, and must not turn Space into "press this button again".
+    property bool focusFromMouse: false
+    onFocusChanged: if (!focus) focusFromMouse = false
+    Keys.onShortcutOverride: (event) => {
+        if (event.key === Qt.Key_Space && !root.focusFromMouse)
+            event.accepted = true
+    }
+
     Accessible.role: Accessible.Button
     Accessible.name: text
     Accessible.description: toolTipText
@@ -67,6 +76,7 @@ Rectangle {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
+            root.focusFromMouse = true
             root.forceActiveFocus()
             root.clicked()
         }

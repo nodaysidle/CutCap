@@ -580,6 +580,13 @@ Rectangle {
     // Small square lane control (M / S / L). Reads as state, not as a button row.
     component LaneToggle: Rectangle {
         id: toggle
+        // Space is play/pause everywhere, except on a control the keyboard moved focus to.
+        property bool focusFromMouse: false
+        onFocusChanged: if (!focus) focusFromMouse = false
+        Keys.onShortcutOverride: (event) => {
+            if (event.key === Qt.Key_Space && !toggle.focusFromMouse)
+                event.accepted = true
+        }
         property string label: "M"
         property bool active: false
         property color activeColor: Design.accent
@@ -609,6 +616,7 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: {
+                toggle.focusFromMouse = true
                 toggle.forceActiveFocus()
                 toggle.toggled()
             }
@@ -654,7 +662,15 @@ Rectangle {
                 }
 
                 Rectangle {
+                    id: chip
                     objectName: "transitionChip_" + delegateRoot6.modelData.secondId
+                    // Space is play/pause everywhere, except on a control the keyboard moved focus to.
+                    property bool focusFromMouse: false
+                    onFocusChanged: if (!focus) focusFromMouse = false
+                    Keys.onShortcutOverride: (event) => {
+                        if (event.key === Qt.Key_Space && !chip.focusFromMouse)
+                            event.accepted = true
+                    }
                     anchors.centerIn: parent
                     width: Design.hCompact
                     height: Design.hCompact
@@ -681,6 +697,7 @@ Rectangle {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            chip.focusFromMouse = true
                             parent.forceActiveFocus()
                             chipMenu.open()
                         }
