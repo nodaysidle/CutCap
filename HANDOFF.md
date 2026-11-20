@@ -257,31 +257,40 @@ and hicolor icon refreshed, and `omarchy menu refresh` returned `ok`.
 
 ---
 
-## Audit and fix run — 2026-11-20 (in progress)
+## Audit and fix run — 2026-11-20 (complete, merged)
 
 Goal: a second full audit (code plus UI/UX on Omarchy 4.5, Hyprland scrolling layout, one
 2560×1440 monitor at scale 1) found 17 findings; the owner asked for all of them to be fixed by
-Haiku subagents, each from a written plan, each reviewed before the next starts.
+Haiku subagents, each from a written plan, each reviewed before the next started.
 
-Where the work is: branch `advisor/audit-fixes`, checked out as a separate git worktree (path in
-`git worktree list`). Its first commit is a snapshot of the uncommitted working tree described in
-the two sections above; every fix is one commit on top. The main working tree is not edited by this
-run apart from this section. Nothing is merged or pushed; merging is the owner's call.
+Done: all 15 plans are implemented, reviewed and committed on branch `advisor/audit-fixes`
+(head `64ab62e`), now merged into `master`. Its first commit `733897d` is a snapshot of the uncommitted working tree described
+in the two sections above; commits `A01` to `A15` are one per plan; the last commit adds `plans/`.
+On that branch: `./bin/build` exits 0, `./bin/test` reports 61 passed and 0 failed (was 41),
+qmllint exits 0.
 
-Plans and status: `plans/README.md` on that branch (one file per plan, status column kept current).
-That index is the list of what is done and what is left.
+Merged into `master` by fast-forward on 2026-11-21 (`master` head is `64ab62e` at the merge; nothing is
+pushed, there is no remote). After the merge `./bin/build` exits 0 and `./bin/test` reports
+`Totals: 61 passed, 0 failed`. The old uncommitted working tree is kept in `git stash`
+(entry "pre-merge working tree backup"); the owner drops it. The audit branch and its worktree are removed.
 
-Findings, in short: startup cache sweep deletes voiceover/TTS/rembg media; single-key shortcuts
-fire behind modal dialogs and Space never activates a focused button; medium/semibold text renders
-italic (Nimbus Sans has no 500/600 weight); `.cutcap` paths reach ffmpeg unchecked (network URLs);
-multi-file import continues into the next project and a failed Open drops running jobs; layout
-breaks below 780×500, which Hyprland hands tiled windows, and the timeline height is fixed; closing
-mid-export or mid-recording asks nothing; every edit rebuilds all timeline models; preview look
-runs on the CPU even when hidden; auto-captions ignore trim/speed; caption ids repeat; undo drops
-previews; filmstrip and ruler are not culled; the ASS backslash fix is wrong; tests leak into
-`~/.cache/cutcap_tests` and `/tmp`; no test opens a project, finishes an export or runs the CLI;
-an image clip on the audio track breaks export.
+Installed: `~/.local/bin/cutcap` was rebuilt from the branch head and reinstalled with the desktop
+entry and icon; `omarchy menu refresh` ran; the Apps entry `apps.cutcap` launches it
+(`uwsm-app -- gtk-launch cutcap.desktop`), checked with a screenshot of the running window. The
+installed binary was built from `64ab62e`, which is now `master`.
 
-Open questions for the owner: the UI font moves from Nimbus Sans to Adwaita Sans (has real 500/600
-weights; one token to revert); below the window minimum the inspector, then the media bin, hide
-automatically; the clip-model work is the caching step only, a full list model is deferred.
+Plans and what each changed: `plans/README.md` on the branch.
+
+Behaviour changes to know: the UI font is Adwaita Sans (Nimbus Sans has no 500/600 weights and
+rendered italic); the window minimum is 800×500; below 800 px wide the inspector hides and below
+560 px the media bin, Undo/Redo and status text hide; the timeline height is a draggable split;
+editing shortcuts are blocked while any dialog is open and Space activates a keyboard-focused
+control; closing asks while an export, recording or job runs; recordings are stored in the app data
+directory and the cache sweep touches only `thumb_`/`strip_`/`subs_` files; project files may only
+name absolute local media paths; caption ids are random; auto-captions follow trim and speed.
+
+Left open: a row-level clip model (every edit still recreates the timeline delegates); a GPU shader
+for the preview look; splitting the 580-line UI smoke test; the espeak leading-dash issue (not
+reproduced); `check()` in the PKGBUILD has not been run under makepkg in a clean chroot; the
+exposure gate in the preview was not watched live on Hyprland; arrow keys on a focused slider still
+move the playhead.
