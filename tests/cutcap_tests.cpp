@@ -2151,6 +2151,52 @@ private slots:
         QCOMPARE(b.textsList().size(), 0);
         QVERIFY2(!b.statusMessage().contains("auto captions", Qt::CaseInsensitive), qPrintable(b.statusMessage()));
     }
+
+    // A multi-file drop must not keep feeding files into the project that replaced its own.
+    void testImportChainStopsAtNewProject() {
+        QTemporaryDir dir;
+        QVariantList files;
+        for (const QString &name : {QStringLiteral("one.mp4"), QStringLiteral("two.mp4"), QStringLiteral("three.mp4")}) {
+            const QString vid = makeSampleVideo(dir.path(), name, "teal", 1.0);
+            QVERIFY(!vid.isEmpty());
+            files << vid;
+        }
+
+        // Positive control: left alone, the chain delivers all three clips.
+        Backend control;
+        control.importMediaAt(files, 0, 0.0);
+        waitForImports(control);
+        QCOMPARE(control.clipsList().size(), 3);
+
+        Backend b;
+        b.importMediaAt(files, 0, 0.0);
+        QVERIFY2(b.importing() > 0, "the first file must still be importing when the project is replaced");
+        b.newProject();
+        waitForImports(b);
+        QTest::qWait(300);
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 0);
+        QCOMPARE(b.assetsList().size(), 0);
+    }
+
+    // A project that fails to open leaves the current one in place, so its running jobs still count.
+    void testFailedOpenKeepsRunningJobs() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "keep.mp4", "navy", 1.0);
+        QVERIFY(!vid.isEmpty());
+        const QString broken = dir.path() + "/broken.cutcap";
+        QFile f(broken);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("this is not a project");
+        f.close();
+
+        Backend b;
+        b.importSingleMedia(vid);
+        QVERIFY2(b.importing() > 0, "the import must still be running when the open fails");
+        QVERIFY2(!b.openProject(broken), "a corrupt project must fail to open");
+        waitForImports(b);
+        QCOMPARE(b.clipsList().size(), 1);
+    }
 };
 
 // Video textures, MultiEffect and shapes need an RHI scene graph; the offscreen platform otherwise

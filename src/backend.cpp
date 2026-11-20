@@ -511,7 +511,6 @@ void Backend::newProject() {
 }
 
 bool Backend::openProject(const QString &pathOrUrl) {
-    ++m_jobGeneration;
     const QString path = normalizeLocalPath(pathOrUrl);
     bool ok = false;
     QString err;
@@ -520,6 +519,7 @@ bool Backend::openProject(const QString &pathOrUrl) {
         fail("Failed to open project: " + err);
         return false;
     }
+    ++m_jobGeneration;
     m_undoStack.clear();
     m_redoStack.clear();
     m_project = loaded;
@@ -707,11 +707,13 @@ struct Backend::ImportChain {
     QStringList queue;
     double cursor = 0.0;
     int track = 0;
+    int generation = 0;
 };
 
 void Backend::importMediaAt(const QVariantList &pathsOrUrls, int track, double atSec) {
     auto chain = std::make_shared<ImportChain>();
     chain->backend = this;
+    chain->generation = m_jobGeneration;
     chain->track = track;
     chain->cursor = std::max(0.0, atSec);
     for (const auto &v : pathsOrUrls)
@@ -720,10 +722,14 @@ void Backend::importMediaAt(const QVariantList &pathsOrUrls, int track, double a
 }
 
 void Backend::processImportChain(const std::shared_ptr<ImportChain> &chain) {
+    // The project this drop was made into is gone; the files still queued do not belong to the new one.
+    if (chain->generation != m_jobGeneration)
+        return;
     while (!chain->queue.isEmpty()) {
         const QString path = normalizeLocalPath(chain->queue.takeFirst());
         if (path.endsWith(".cutcap", Qt::CaseInsensitive)) {
             openProject(path);
+            chain->generation = m_jobGeneration;
             continue;
         }
         if (path.endsWith(".srt", Qt::CaseInsensitive)) {
