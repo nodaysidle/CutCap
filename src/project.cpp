@@ -1,6 +1,7 @@
 #include "project.h"
 
 #include <QColor>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -18,6 +19,12 @@ QString sanitizedChromaColor(const QString &raw) {
     if (normalized.startsWith(QLatin1Char('#')))
         normalized.remove(0, 1);
     return QColor(QStringLiteral("#") + normalized).name();
+}
+
+// Anything that is not an absolute path (a URL, an ffmpeg protocol such as concat:, a relative
+// path) is dropped: ffmpeg would open it as a network or protocol input.
+QString localMediaPath(const QString &raw) {
+    return QDir::isAbsolutePath(raw) ? raw : QString();
 }
 
 namespace {
@@ -74,7 +81,7 @@ QJsonObject MediaAsset::toJson() const {
 MediaAsset MediaAsset::fromJson(const QJsonObject &obj) {
     MediaAsset a;
     a.id = obj.value("id").toString();
-    a.path = obj.value("path").toString();
+    a.path = localMediaPath(obj.value("path").toString());
     a.name = obj.value("name").toString();
     a.kind = obj.value("kind").toString("video");
     a.durationSec = std::max(0.1, obj.value("durationSec").toDouble(5.0));
@@ -82,8 +89,8 @@ MediaAsset MediaAsset::fromJson(const QJsonObject &obj) {
     a.height = evenDimension(obj.value("height").toInt(1080));
     a.fps = std::clamp(obj.value("fps").toDouble(30.0), 1.0, 240.0);
     a.hasAudio = obj.value("hasAudio").toBool(true);
-    a.thumbnailPath = obj.value("thumbnailPath").toString();
-    a.filmstripPath = obj.value("filmstripPath").toString();
+    a.thumbnailPath = localMediaPath(obj.value("thumbnailPath").toString());
+    a.filmstripPath = localMediaPath(obj.value("filmstripPath").toString());
     const auto arr = obj.value("waveformPeaks").toArray();
     for (const auto &v : arr)
         a.waveformPeaks.append(v.toDouble());
@@ -167,7 +174,7 @@ TimelineClip TimelineClip::fromJson(const QJsonObject &obj) {
     TimelineClip c;
     c.id = obj.value("id").toString();
     c.assetId = obj.value("assetId").toString();
-    c.sourcePath = obj.value("sourcePath").toString();
+    c.sourcePath = localMediaPath(obj.value("sourcePath").toString());
     c.name = obj.value("name").toString();
     c.kind = obj.value("kind").toString("video");
     c.track = std::clamp(obj.value("track").toInt(0), 0, 2);
@@ -193,7 +200,7 @@ TimelineClip TimelineClip::fromJson(const QJsonObject &obj) {
     c.chromaColor = sanitizedChromaColor(obj.value("chromaColor").toString("#00ff00"));
     c.chromaSimilarity = std::clamp(obj.value("chromaSimilarity").toDouble(0.18), 0.01, 0.6);
     c.chromaBlend = std::clamp(obj.value("chromaBlend").toDouble(0.08), 0.0, 0.5);
-    c.processedPath = obj.value("processedPath").toString();
+    c.processedPath = localMediaPath(obj.value("processedPath").toString());
     const auto arr = obj.value("keyframes").toArray();
     for (const auto &v : arr)
         c.keyframes.append(Keyframe::fromJson(v.toObject()));

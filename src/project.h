@@ -10,6 +10,9 @@
 // Returns "#rrggbb" for valid input (with or without a leading '#'), otherwise "#00ff00".
 QString sanitizedChromaColor(const QString &raw);
 
+// Keeps a media path from a project file only when it is an absolute local path.
+QString localMediaPath(const QString &raw);
+
 struct Keyframe {
     double timeSec = 0.0;
     double x = 0.5;

@@ -1769,6 +1769,39 @@ private slots:
         QCOMPARE(c.keyframes[0].opacity, 1.0);
     }
 
+    // A project file is untrusted: a media path that is not an absolute local path would reach
+    // ffmpeg as a network input the moment the project opens.
+    void testProjectPathsMustBeLocalFiles() {
+        const QString host = QStringLiteral("127.0.0.1:9");
+        const QStringList hostile{QStringLiteral("http://") + host + "/a.mp4",
+                                  QStringLiteral("https://") + host + "/a.mp4",
+                                  QStringLiteral("tcp://") + host,
+                                  QStringLiteral("concat:/a.mp4|/b.mp4"),
+                                  QStringLiteral("relative/a.mp4")};
+        for (const QString &bad : hostile) {
+            const MediaAsset a = MediaAsset::fromJson(QJsonObject{
+                {"id", "a1"}, {"path", bad}, {"thumbnailPath", bad}, {"filmstripPath", bad}});
+            QVERIFY2(a.path.isEmpty(), qPrintable(bad));
+            QVERIFY2(a.thumbnailPath.isEmpty(), qPrintable(bad));
+            QVERIFY2(a.filmstripPath.isEmpty(), qPrintable(bad));
+            const TimelineClip c = TimelineClip::fromJson(QJsonObject{
+                {"id", "c1"}, {"sourcePath", bad}, {"processedPath", bad}});
+            QVERIFY2(c.sourcePath.isEmpty(), qPrintable(bad));
+            QVERIFY2(c.processedPath.isEmpty(), qPrintable(bad));
+        }
+        // Positive control: a real absolute path survives unchanged.
+        const QString good = QStringLiteral("/tmp/clip one.mp4");
+        const MediaAsset a = MediaAsset::fromJson(QJsonObject{
+            {"id", "a1"}, {"path", good}, {"thumbnailPath", good}, {"filmstripPath", good}});
+        QCOMPARE(a.path, good);
+        QCOMPARE(a.thumbnailPath, good);
+        QCOMPARE(a.filmstripPath, good);
+        const TimelineClip c = TimelineClip::fromJson(QJsonObject{
+            {"id", "c1"}, {"sourcePath", good}, {"processedPath", good}});
+        QCOMPARE(c.sourcePath, good);
+        QCOMPARE(c.processedPath, good);
+    }
+
     // A literal backslash typed in a title must not turn into an ASS control code on export.
     void testAssEscapesBackslash() {
         QTemporaryDir dir;
