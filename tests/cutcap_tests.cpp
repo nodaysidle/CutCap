@@ -383,6 +383,36 @@ private slots:
         QCOMPARE(b.clipsList().size(), 2);
     }
 
+    // Previews are derived from the file, not edited by the user: undo must not take them away.
+    void testUndoKeepsPreviews() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "undo.mp4", "0x445566", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        Backend b;
+        b.importSingleMedia(vid);
+        waitForImports(b);
+        QCOMPARE(b.assetsList().size(), 1);
+        QVERIFY2(!b.assetsList().first().toMap().value("thumbnailPath").toString().isEmpty(),
+                 "the previews never arrived, so the test cannot observe them being lost");
+
+        auto checkPreviews = [&](const char *when) {
+            QCOMPARE(b.assetsList().size(), 1);
+            const QVariantMap asset = b.assetsList().first().toMap();
+            QVERIFY2(!asset.value("thumbnailPath").toString().isEmpty(), when);
+            QVERIFY2(!asset.value("filmstripPath").toString().isEmpty(), when);
+            QVERIFY2(asset.value("waveformPeaks").toList().size() == 80, when);
+        };
+
+        QVERIFY(b.canUndo());
+        b.undo();
+        checkPreviews("after undo");
+        b.redo();
+        checkPreviews("after redo");
+        QCOMPARE(b.clipsList().size(), 1);
+        QVERIFY2(!b.clipsList().first().toMap().value("filmstripPath").toString().isEmpty(), "clip after redo");
+    }
+
     void exportArgsChainXfadeForAdjacentTransition() {
         Project p;
         TimelineClip a;

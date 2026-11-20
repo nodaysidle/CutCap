@@ -210,6 +210,8 @@ private:
     void importAssetAsync(const QString &pathOrUrl, const std::function<void(const QString &)> &onReady);
     // Fills one asset's thumbnail, filmstrip and waveform off the GUI thread and merges them back.
     void startPreviewJob(const MediaAsset &asset);
+    // After a snapshot swap, copies previews from the state just left or regenerates them.
+    void carryPreviewsFrom(const Project &previous);
     // One dropped batch: the files still to place and where the next one starts.
     struct ImportChain;
     void processImportChain(const std::shared_ptr<ImportChain> &chain);

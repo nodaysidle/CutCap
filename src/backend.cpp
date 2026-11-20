@@ -126,7 +126,6 @@ Backend::~Backend() {
         m_exportProcess.kill();
         m_exportProcess.waitForFinished(1000);
         // Same rule as a cancelled export: a half-written file must not pass for a finished video.
-        // Same rule as a cancelled export: a half-written file must not pass for a finished video.
         QFile::remove(m_exportOutputPath);
     }
     if (m_voiceoverProcess.state() != QProcess::NotRunning) {
@@ -1685,12 +1684,34 @@ void Backend::cancelExport() {
     setStatus("Export cancelled");
 }
 
+// A snapshot taken before an asset's previews arrived holds none. They are derived from the file,
+// so after swapping snapshots they are copied from the state just left, or regenerated.
+void Backend::carryPreviewsFrom(const Project &previous) {
+    for (MediaAsset &asset : m_project.assets) {
+        const bool missing = asset.thumbnailPath.isEmpty() && asset.filmstripPath.isEmpty() &&
+                             asset.waveformPeaks.isEmpty();
+        if (!missing)
+            continue;
+        const int idx = previous.findAssetIndex(asset.id);
+        if (idx >= 0 && !(previous.assets[idx].thumbnailPath.isEmpty() && previous.assets[idx].filmstripPath.isEmpty() &&
+                          previous.assets[idx].waveformPeaks.isEmpty())) {
+            asset.thumbnailPath = previous.assets[idx].thumbnailPath;
+            asset.filmstripPath = previous.assets[idx].filmstripPath;
+            asset.waveformPeaks = previous.assets[idx].waveformPeaks;
+        } else {
+            startPreviewJob(asset);
+        }
+    }
+}
+
 void Backend::undo() {
     if (m_undoStack.isEmpty())
         return;
     m_undoMergeKey.clear();
+    const Project left = m_project;
     m_redoStack.append(m_project);
     m_project = m_undoStack.takeLast();
+    carryPreviewsFrom(left);
     pruneClipSelection();
     m_dirty = true;
     emit projectChanged();
@@ -1705,8 +1726,10 @@ void Backend::redo() {
     if (m_redoStack.isEmpty())
         return;
     m_undoMergeKey.clear();
+    const Project left = m_project;
     m_undoStack.append(m_project);
     m_project = m_redoStack.takeLast();
+    carryPreviewsFrom(left);
     pruneClipSelection();
     m_dirty = true;
     emit projectChanged();
