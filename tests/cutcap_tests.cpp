@@ -3,6 +3,7 @@
 #include <QSet>
 #include <QTemporaryDir>
 #include <QFile>
+#include <QFontInfo>
 #include <QRegularExpression>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -195,6 +196,25 @@ private slots:
         QVERIFY(contrastRatio(d.textPrimary(), d.surfacePanel()) >= 7.0);
         QVERIFY(contrastRatio(d.textSecondary(), d.surfaceRaised()) >= 4.5);
         QVERIFY(d.alpha("#112233", 0.5).endsWith("80"));
+    }
+
+    // A family without the weights the UI asks for makes Qt fall back to a slanted face (Nimbus
+    // Sans has no 500/600 and resolved to Italic and Bold Italic).
+    void uiFontWeightsAreUpright() {
+        QTemporaryDir dir;
+        Theme theme(dir.path());
+        Design d(theme);
+        for (int weight : {d.wRegular(), d.wMedium(), d.wSemibold()}) {
+            QFont font(d.fontUi());
+            font.setWeight(QFont::Weight(weight));
+            const QFontInfo info(font);
+            QVERIFY2(info.family().startsWith(d.fontUi()),
+                     qPrintable(QString("UI font %1 is not installed; got %2").arg(d.fontUi(), info.family())));
+            const QString style = info.styleName();
+            QVERIFY2(!style.contains("Italic", Qt::CaseInsensitive) && !style.contains("Oblique", Qt::CaseInsensitive),
+                     qPrintable(QString("weight %1 of %2 resolves to the slanted face '%3'")
+                                    .arg(weight).arg(d.fontUi(), style)));
+        }
     }
 
     void secondaryTextMeetsContrastOnAllSurfaces() {

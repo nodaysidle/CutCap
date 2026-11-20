@@ -71,9 +71,10 @@ live Omarchy theme so a theme switch restyles the app with no QML change.
 Weights: `wRegular` 400, `wMedium` 500, `wSemibold` 600. No bold-as-structure: use a label tier
 and a hairline instead.
 
-Typography: `Nimbus Sans` carries the UI; `JetBrains Mono` carries timecode, ruler labels, numeric
+Typography: `Adwaita Sans` carries the UI; `JetBrains Mono` carries timecode, ruler labels, numeric
 fields, shortcuts and technical status. The mono face makes changing values easy to scan without
-turning the whole interface into a terminal.
+turning the whole interface into a terminal. The UI family must ship real 500 and 600 weights; Nimbus
+Sans does not, and Qt substituted its italic faces.
 
 ### Controls
 

@@ -5,7 +5,7 @@ pkgdesc="Local-first video editor for Arch Linux and Omarchy"
 arch=('x86_64' 'aarch64')
 url="https://github.com/nodaysidle/CutCap"
 license=('MIT')
-depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-svg' 'qt6-wayland' 'ffmpeg' 'pipewire')
+depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-svg' 'qt6-wayland' 'ffmpeg' 'pipewire' 'adwaita-fonts' 'ttf-jetbrains-mono')
 makedepends=('qt6-base' 'qt6-declarative' 'qt6-multimedia')
 
 build() {

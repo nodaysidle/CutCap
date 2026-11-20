@@ -106,7 +106,7 @@ public:
     int s7() const { return 24; }
     int s8() const { return 32; }
 
-    QString fontUi() const { return QStringLiteral("Nimbus Sans"); }
+    QString fontUi() const { return QStringLiteral("Adwaita Sans"); }
     QString fontMono() const { return QStringLiteral("JetBrains Mono"); }
 
     int tMicro() const { return 12; }
