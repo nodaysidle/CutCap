@@ -289,8 +289,66 @@ control; closing asks while an export, recording or job runs; recordings are sto
 directory and the cache sweep touches only `thumb_`/`strip_`/`subs_` files; project files may only
 name absolute local media paths; caption ids are random; auto-captions follow trim and speed.
 
-Left open: a row-level clip model (every edit still recreates the timeline delegates); a GPU shader
-for the preview look; splitting the 580-line UI smoke test; the espeak leading-dash issue (not
-reproduced); `check()` in the PKGBUILD has not been run under makepkg in a clean chroot; the
-exposure gate in the preview was not watched live on Hyprland; arrow keys on a focused slider still
-move the playhead.
+## Next time — open work (written 2026-11-21)
+
+The owner's bar for every item: it must work, and it must be measurably better than before.
+So each item is done only when (a) a test or a recorded measurement fails before the change and
+passes after it, (b) `./bin/build` exits 0 and `./bin/test` reports 0 failed with at least the
+current 61 tests, (c) qmllint exits 0, and (d) for anything visible, the installed app was
+launched on Hyprland and looked at, not only rendered offscreen. Record the before and after
+numbers here. If a change cannot be shown to be better, do not merge it.
+
+Line numbers below are from the audit and may have moved; search for the named symbol.
+
+Not yet verified (do these first, they are checks, not changes):
+
+1. `check()` in `pkgbuild/PKGBUILD` has never run under `makepkg` in a clean chroot. The suite
+   needs ffmpeg with libx264/aac/lavfi and Mesa OpenGL; `checkdepends` may be incomplete.
+   Done when: a clean-chroot `makepkg` runs `check()` and prints `61 passed, 0 failed`.
+2. The preview's "skip work while unseen" gate (`canBeSeen()` in `src/clipframeitem.cpp`) is only
+   covered by a test with a hidden item. Nobody watched it live. Done when: with a look applied
+   and playback running, CPU use of `cutcap` is recorded on the visible workspace and again after
+   switching to another Hyprland workspace, and the second number is near idle.
+
+Bugs still present:
+
+3. Arrow keys on a keyboard-focused slider move the playhead instead of the slider
+   (`src/qml/Main.qml` Left/Right shortcuts; sliders in `src/qml/InspectorPanel.qml`). Follow the
+   pattern plan 002 used for Space (`Keys.onShortcutOverride` on a keyboard-focused control).
+   Done when: a test tabs to a slider, presses Right, and the slider value changes while the
+   playhead does not.
+4. TTS text that starts with `-` is read by espeak as an option (`src/mediaengine.cpp`, the
+   espeak argument list; was `:866`). Not reproduced because espeak is not installed here. The
+   likely fix is a `--` before the text. Done when: a test asserts the built argument list has
+   `--` before text beginning with `-`.
+
+Performance, where "better than before" needs a number:
+
+5. Row-level clip model. Plan 014 cut clip-list builds from 9 to 1 per edit, but every edit still
+   destroys and recreates all timeline clip delegates (`Backend::clipsList` in `src/backend.cpp`,
+   the three lane Repeaters in `src/qml/TimelinePanel.qml`). Replace with a `QAbstractListModel`
+   that emits `dataChanged` for the edited row. Risks: about 40 test sites call `clipsList()`
+   (keep it as a C++ accessor) and the drag code holds delegate references. Done when: a test
+   counts delegate creations for one slider tick and the count drops from N (all clips) to 0,
+   and the existing `oneClipListBuildPerEdit` test still passes.
+6. Preview look on the GPU. The look math runs on the CPU in `src/clipframeitem.cpp`
+   (`process()`): measured at the audit, one 1400×788 frame took 44 ms (saturation), 54 ms
+   (blur r8) and 50 ms (chroma), which caps the preview near 20 fps. Move it to a shader.
+   Done when: the same three looks are timed again and playback with a look holds the source
+   frame rate; the exported file must look the same as the preview (compare a frame).
+
+Test quality:
+
+7. `uiSmokeButtonsPipAndDrop` in `tests/cutcap_tests.cpp` is about 580 lines in one slot, so the
+   first failure hides the rest, and its fixed `qWait` calls add about 7 s. Split it by feature
+   and replace waits with `QTRY_*`. Done when: no assertion is dropped (count them before and
+   after), the suite still has 0 failed, and the total run time is lower than before (the full
+   suite took 31 s on 41 tests at the audit and 61 s on 61 tests after the merge).
+
+Smaller, from the audit, not planned: `DESIGN.md` section 5 is out of date (top bar height, bin
+tabs); `QT += dbus` is linked in `cutcap.pro` but unused; per-playhead-tick lane maps are rebuilt
+on every position update (microseconds today, not worth doing until clip counts grow).
+
+Ideas the owner has not decided on: a desktop notification and idle-inhibit when an export
+finishes; a key to collapse the media bin or inspector by hand; remembering splitter positions
+and zoom between launches.
