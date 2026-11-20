@@ -33,7 +33,9 @@ class Backend : public QObject {
 
     Q_PROPERTY(QVariantList assetsList READ assetsList NOTIFY assetsChanged)
     Q_PROPERTY(QVariantList clipsList READ clipsList NOTIFY timelineChanged)
+    Q_PROPERTY(int clipCount READ clipCount NOTIFY timelineChanged)
     Q_PROPERTY(QVariantList textsList READ textsList NOTIFY timelineChanged)
+    Q_PROPERTY(int textCount READ textCount NOTIFY timelineChanged)
     Q_PROPERTY(QVariantList transitionPoints READ transitionPoints NOTIFY timelineChanged)
     Q_PROPERTY(QVariantList activeTexts READ activeTexts NOTIFY activeTextsChanged)
     Q_PROPERTY(QVariantList lanesList READ lanesList NOTIFY timelineChanged)
@@ -80,7 +82,11 @@ public:
 
     QVariantList assetsList() const;
     QVariantList clipsList() const;
+    int clipCount() const;
     QVariantList textsList() const;
+    int textCount() const;
+    // How often the clip list was rebuilt; tests use it to catch redundant QML reads.
+    int clipsListBuilds() const { return m_clipsListBuilds; }
     // Junctions where two adjacent clips on one lane touch, so the timeline can offer a transition.
     QVariantList transitionPoints() const;
     QVariantList activeTexts() const;
@@ -234,6 +240,7 @@ private:
     double m_zoomPxPerSec = 48.0;
     QString m_selectedClipId;
     QStringList m_selectedClipIds;
+    mutable int m_clipsListBuilds = 0;
     QString m_selectionAnchorId;
     QString m_selectedTextId;
     QString m_statusMessage = "Ready — drop clips or press Ctrl+O";

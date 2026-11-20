@@ -93,7 +93,7 @@ Rectangle {
                 height: width / root.aspectRatio
                 // An empty project has no picture, so it shows the themed bed and a prompt in theme
                 // ink; black would make the prompt unreadable in a light theme. Playback is black.
-                readonly property bool emptyProject: Backend.clipsList.length === 0 && Backend.textsList.length === 0
+                readonly property bool emptyProject: Backend.clipCount === 0 && Backend.textCount === 0
                 color: emptyProject ? Design.surfacePanel : "#000000"
                 clip: true
                 border.color: Design.borderHairline

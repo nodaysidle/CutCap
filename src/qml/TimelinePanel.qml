@@ -12,6 +12,9 @@ Rectangle {
     readonly property int headerWidth: 168
     readonly property int trackHeight: Design.trackH
     readonly property real pxPerSec: Backend.zoomPxPerSec
+    // Read once here: every `Backend.clipsList` read rebuilds the whole list in C++.
+    readonly property var clips: Backend.clipsList
+    readonly property var lanes: Backend.lanesList
     readonly property real timelineWidth: Math.max(timelineFlick.width, (Backend.totalDuration + 10) * pxPerSec)
 
     // Every live clip delegate, keyed by clip id. Captured once per drag so a group move can
@@ -189,7 +192,7 @@ Rectangle {
                         id: delegateRoot5
                         required property var modelData
                         readonly property var laneState: delegateRoot5.modelData.track >= 0
-                                                            ? (Backend.lanesList[delegateRoot5.modelData.track] || ({}))
+                                                            ? (root.lanes[delegateRoot5.modelData.track] || ({}))
                                                             : ({})
                         width: root.headerWidth
                         height: root.trackHeight
@@ -420,7 +423,7 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: Backend.clipsList
+                            model: root.clips
                             delegate: Loader {
                                 id: delegateRoot1
                                 required property var modelData
@@ -451,7 +454,7 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: Backend.clipsList
+                            model: root.clips
                             delegate: Loader {
                                 id: delegateRoot2
                                 required property var modelData
@@ -527,7 +530,7 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: Backend.clipsList
+                            model: root.clips
                             delegate: Loader {
                                 id: delegateRoot3
                                 required property var modelData
@@ -837,7 +840,7 @@ Rectangle {
             objectName: "clipBody"
             readonly property string clipId: clipData ? clipData.id : ""
             readonly property bool selected: Backend.selectedClipIds.indexOf(clipData.id) >= 0
-            readonly property bool locked: (Backend.lanesList[clipData.track] || ({})).locked === true
+            readonly property bool locked: (root.lanes[clipData.track] || ({})).locked === true
             property bool hovered: false
             property var dragOrigins: ({})
             property var dragItems: ({})

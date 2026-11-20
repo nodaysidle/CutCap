@@ -364,7 +364,12 @@ QVariantList Backend::assetsList() const {
     return out;
 }
 
+int Backend::clipCount() const { return int(m_project.clips.size()); }
+
+int Backend::textCount() const { return int(m_project.texts.size()); }
+
 QVariantList Backend::clipsList() const {
+    ++m_clipsListBuilds;
     QVariantList out;
     for (const auto &c : m_project.clips) {
         QVariantMap map = c.toJson().toVariantMap();

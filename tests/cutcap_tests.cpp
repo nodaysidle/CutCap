@@ -2278,6 +2278,48 @@ private slots:
         QVERIFY2(backend.dirty(), "Discard must not save the project");
     }
 
+    void oneClipListBuildPerEdit() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "builds.mp4", "0x336699", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        QTest::qWait(300);
+        QCOMPARE(backend.clipCount(), 1);
+        const QString clipId = backend.selectedClipId();
+        QVERIFY(!clipId.isEmpty());
+
+        const int before = backend.clipsListBuilds();
+        backend.updateClipProperty(clipId, "brightness", 0.2);
+        QTest::qWait(200);
+        const int builds = backend.clipsListBuilds() - before;
+        QVERIFY2(builds >= 1, "the timeline did not refresh after the edit");
+        QVERIFY2(builds <= 2, qPrintable(QString("one edit rebuilt the clip list %1 times").arg(builds)));
+    }
+
     void timelineCreatesOnlyVisibleItems() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

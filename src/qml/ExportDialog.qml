@@ -33,8 +33,13 @@ Dialog {
     readonly property string selectedCodec: codecCombo.currentValue || "h264"
     readonly property string selectedResolution: resCombo.currentValue || "project"
     readonly property var estimate: {
+        // Closed, nobody reads this; computing it on every edit was pure waste.
+        if (!root.opened)
+            return ({ resolutionLabel: "", durationLabel: "", estimatedSizeLabel: "",
+                      codecSupported: true, encoder: "", hasAudio: false })
         // Re-evaluate whenever timeline clips, project resolution, or combo selections change.
-        const _clips = Backend.clipsList.length
+        const _clips = Backend.clipCount
+        const _total = Backend.totalDuration
         const _w = Backend.projectWidth
         const _h = Backend.projectHeight
         return Backend.estimateExport(selectedPreset, selectedCodec, selectedResolution)
@@ -207,7 +212,7 @@ Dialog {
         }
 
         Text {
-            visible: Backend.clipsList.length === 0
+            visible: Backend.clipCount === 0
             Layout.fillWidth: true
             text: "Add at least one clip to the timeline before exporting."
             color: Design.warning
@@ -235,7 +240,7 @@ Dialog {
             ActionButton {
                 objectName: "exportStartButton"
                 text: "Choose File & Export"
-                enabled: !Backend.exporting && Backend.clipsList.length > 0 && root.estimate.codecSupported
+                enabled: !Backend.exporting && Backend.clipCount > 0 && root.estimate.codecSupported
                 highlighted: true
                 fontPixelSize: Design.tBody
                 horizontalPadding: Design.s5
