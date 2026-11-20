@@ -334,17 +334,30 @@ Rectangle {
                     z: -2
                 }
 
-                // Time grid, drawn behind the clips.
-                Repeater {
-                    model: Math.ceil(root.timelineWidth / (2 * root.pxPerSec))
-                    delegate: Rectangle {
-                        x: index * 2 * root.pxPerSec
-                        y: 24
-                        width: 1
-                        height: timelineFlick.contentHeight - 24
-                        color: Design.borderHairline
-                        opacity: 0.5
-                        z: -1
+                // Time grid, drawn behind the clips. Only the lines under the viewport exist.
+                Item {
+                    id: grid
+                    objectName: "timeGrid"
+                    z: -1
+                    width: root.timelineWidth
+                    height: timelineFlick.contentHeight
+                    readonly property real step: 2 * root.pxPerSec
+                    readonly property int firstTick: Math.max(0, Math.floor(timelineFlick.contentX / step))
+                    readonly property int tickCount: Math.min(
+                        Math.ceil(root.timelineWidth / step) - firstTick,
+                        Math.ceil(timelineFlick.width / step) + 2)
+
+                    Repeater {
+                        model: Math.max(0, grid.tickCount)
+                        delegate: Rectangle {
+                            readonly property int tick: grid.firstTick + index
+                            x: tick * grid.step
+                            y: 24
+                            width: 1
+                            height: timelineFlick.contentHeight - 24
+                            color: Design.borderHairline
+                            opacity: 0.5
+                        }
                     }
                 }
 
@@ -355,24 +368,33 @@ Rectangle {
 
                     // Time Ruler
                     Rectangle {
+                        id: ruler
+                        objectName: "timeRuler"
                         width: root.timelineWidth
                         height: 24
                         color: Design.surfaceSunken
                         border.color: Design.borderHairline
                         border.width: 1
+                        readonly property real step: 2 * root.pxPerSec
+                        readonly property int firstTick: Math.max(0, Math.floor(timelineFlick.contentX / step))
+                        readonly property int tickCount: Math.min(
+                            Math.ceil(root.timelineWidth / step) - firstTick,
+                            Math.ceil(timelineFlick.width / step) + 2)
 
+                        // Only the ticks under the viewport exist; scrolling moves them.
                         Repeater {
-                            model: Math.ceil(root.timelineWidth / (2 * root.pxPerSec))
+                            model: Math.max(0, ruler.tickCount)
                             delegate: Item {
-                                x: index * 2 * root.pxPerSec
+                                readonly property int tick: ruler.firstTick + index
+                                x: tick * ruler.step
                                 height: 24
                                 Rectangle { width: 1; height: 8; anchors.bottom: parent.bottom; color: Design.borderStrong }
                                 Text {
                                     // The playhead handle is 13 px wide and centred on t=0, so the
                                     // first tick needs to clear it; later ticks keep the hairline inset.
-                                    x: index === 0 ? Design.s4 + Design.s1 : Design.s3
+                                    x: tick === 0 ? Design.s4 + Design.s1 : Design.s3
                                     y: 4
-                                    text: Math.floor(index * 2 / 60) + ":" + String(index * 2 % 60).padStart(2, "0")
+                                    text: Math.floor(tick * 2 / 60) + ":" + String(tick * 2 % 60).padStart(2, "0")
                                     color: Design.textSecondary
                                     font.family: Design.fontMono
                                     font.pixelSize: Design.tMicro
@@ -836,20 +858,28 @@ Rectangle {
             clip: true
 
             // Video/image: frames from the filmstrip at the source time under each tile.
-            Row {
+            Item {
                 id: strip
                 objectName: "clipStrip"
                 readonly property real tileWidth: height * 16 / 9
                 anchors.fill: parent
                 visible: clipBox.visual && (clipData.filmstripPath || "").length > 0
+                // Like the waveform: only the tiles under the viewport exist.
+                readonly property int tileCount: tileWidth > 0 ? Math.ceil(clipBox.width / tileWidth) : 0
+                readonly property real viewLeft: timelineFlick.contentX - clipBox.x
+                readonly property int firstTile: Math.max(0, Math.min(tileCount, Math.floor(viewLeft / Math.max(1, tileWidth))))
+                readonly property int lastTile: Math.max(firstTile, Math.min(tileCount,
+                    Math.ceil((viewLeft + timelineFlick.width) / Math.max(1, tileWidth))))
                 Repeater {
-                    model: strip.visible && strip.tileWidth > 0 ? Math.ceil(clipBox.width / strip.tileWidth) : 0
+                    model: strip.visible ? strip.lastTile - strip.firstTile : 0
                     delegate: Image {
+                        readonly property int tile: strip.firstTile + index
                         readonly property int frames: clipData.filmstripFrames || 1
                         readonly property int tileWidth: clipData.filmstripTileWidth || 1
                         readonly property int tileHeight: clipData.filmstripTileHeight || 1
                         readonly property int frameIndex: Math.max(0, Math.min(frames - 1,
-                            Math.floor(clipBox.sourceTimeAt((index + 0.5) * strip.tileWidth) / clipBox.sourceDuration * frames)))
+                            Math.floor(clipBox.sourceTimeAt((tile + 0.5) * strip.tileWidth) / clipBox.sourceDuration * frames)))
+                        x: tile * strip.tileWidth
                         width: strip.tileWidth
                         height: strip.height
                         source: "file://" + clipData.filmstripPath

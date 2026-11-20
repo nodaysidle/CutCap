@@ -1131,8 +1131,9 @@ private slots:
         // Clip visuals are real: video clips tile filmstrip frames, audio clips draw the waveform.
         auto firstVisible = [&](const QString &name, bool needsChildren = true) -> QQuickItem * {
             std::function<QQuickItem *(QQuickItem *)> walk = [&](QQuickItem *it) -> QQuickItem * {
+                // more than the Repeater itself: at least one tile
                 if (it->objectName() == name && it->isVisible() &&
-                    (!needsChildren || it->childItems().size() > 0))
+                    (!needsChildren || it->childItems().size() > 1))
                     return it;
                 for (QQuickItem *child : it->childItems())
                     if (auto *found = walk(child))
@@ -2275,6 +2276,93 @@ private slots:
         QTest::qWait(200);
         QVERIFY2(!window->isVisible(), "Discard must close the window");
         QVERIFY2(backend.dirty(), "Discard must not save the project");
+    }
+
+    void timelineCreatesOnlyVisibleItems() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "long.mp4", "0x336699", 600.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        window->resize(1280, 800);
+        backend.setZoomPxPerSec(240.0);   // maximum zoom: the clip is 144,000 px wide
+        QTest::qWait(400);
+
+        auto *flick = findItem(window->contentItem(), "timelineFlick");
+        QVERIFY(flick);
+        QVERIFY2(flick->property("contentWidth").toDouble() > 100000.0, "the timeline is not long enough to test culling");
+
+        auto countChildren = [&](const QString &name) {
+            std::function<int(QQuickItem *)> walk = [&](QQuickItem *it) -> int {
+                if (it->objectName() == name && it->isVisible())
+                    return int(it->childItems().size());
+                for (QQuickItem *child : it->childItems()) {
+                    const int n = walk(child);
+                    if (n >= 0)
+                        return n;
+                }
+                return -1;
+            };
+            return walk(window->contentItem());
+        };
+        auto audit = [&](const char *when) {
+            for (const char *name : {"clipStrip", "timeRuler", "timeGrid"}) {
+                const int n = countChildren(name);
+                QVERIFY2(n >= 4, qPrintable(QString("%1: %2 shows too few items (%3)").arg(when, name).arg(n)));
+                QVERIFY2(n <= 80, qPrintable(QString("%1: %2 created %3 items for one viewport").arg(when, name).arg(n)));
+            }
+        };
+        audit("at the start");
+
+        // Scrolled far into the clip, the visible tiles must be the ones under the viewport.
+        flick->setProperty("contentX", 60000.0);
+        QTest::qWait(300);
+        audit("scrolled to 60000 px");
+        std::function<QQuickItem *(QQuickItem *)> findStrip = [&](QQuickItem *it) -> QQuickItem * {
+            if (it->objectName() == "clipStrip" && it->isVisible())
+                return it;
+            for (QQuickItem *child : it->childItems())
+                if (auto *found = findStrip(child))
+                    return found;
+            return nullptr;
+        };
+        auto *strip = findStrip(window->contentItem());
+        QVERIFY(strip);
+        const QRectF view(flick->mapToScene(QPointF(0, 0)), QSizeF(flick->width(), flick->height()));
+        int tilesInView = 0;
+        for (QQuickItem *tile : strip->childItems()) {
+            if (tile->width() <= 0)
+                continue;
+            const qreal left = tile->mapToScene(QPointF(0, 0)).x();
+            if (left + tile->width() > view.left() && left < view.right())
+                ++tilesInView;
+        }
+        QVERIFY2(tilesInView >= 4, qPrintable(QString("only %1 filmstrip tiles are under the viewport").arg(tilesInView)));
     }
 
     void layoutSurvivesTiledSizes() {
