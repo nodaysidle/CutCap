@@ -12,8 +12,8 @@ ApplicationWindow {
     visible: true
     width: 1440
     height: 900
-    minimumWidth: 880
-    minimumHeight: 580
+    minimumWidth: 780
+    minimumHeight: 500
     title: Backend.projectTitle + (Backend.dirty ? " *" : "") + " — CutCap"
     color: Design.surfaceSunken
 
@@ -425,29 +425,30 @@ ApplicationWindow {
         anchors.margins: 0
         spacing: 0
 
-        // Top Bar: flat command strip. No card, no radius — a hairline under it does the work.
+        // Top Bar: a quiet document strip. The project identity stays leading, commands group in
+        // the middle, and the one primary action remains on the trailing edge.
         Rectangle {
             id: topBar
             objectName: "topBar"
             Layout.fillWidth: true
             Layout.preferredHeight: Design.topBarH
-            color: Design.surfaceSunken
+            color: Design.surfacePanel
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s4
-                anchors.rightMargin: Design.s4
-                spacing: Design.s2
+                anchors.leftMargin: Design.s5
+                anchors.rightMargin: Design.s5
+                spacing: Design.s3
 
-                // The mark: two offset clips, the cut between them. Drawn rather than an asset so
-                // it stays crisp, and in ink rather than the accent, which is reserved for actions.
+                // The mark is two offset cuts: compact enough for a toolbar, distinctive enough to
+                // own the product without spending the theme accent on branding.
                 Item {
                     objectName: "brandMark"
                     Layout.alignment: Qt.AlignVCenter
-                    implicitWidth: 16
-                    implicitHeight: 16
-                    Rectangle { x: 0; y: 2; width: 11; height: 5; color: Design.textPrimary }
-                    Rectangle { x: 5; y: 9; width: 11; height: 5; color: Design.textPrimary }
+                    implicitWidth: 20
+                    implicitHeight: 18
+                    Rectangle { x: 0; y: 2; width: 14; height: 6; color: Design.textPrimary }
+                    Rectangle { x: 6; y: 10; width: 14; height: 6; color: Design.textPrimary }
                 }
 
                 TextMetrics {
@@ -464,13 +465,14 @@ ApplicationWindow {
                     Accessible.name: "Project title"
                     text: Backend.projectTitle
                     color: Design.textPrimary
+                    font.family: Design.fontUi
                     font.pixelSize: Design.tBodyLg
-                    font.weight: Design.wMedium
+                    font.weight: Design.wSemibold
                     selectByMouse: true
-                    Layout.minimumWidth: 120
+                    Layout.minimumWidth: 136
                     // Follow the name so the unsaved badge sits next to it instead of drifting.
-                    Layout.preferredWidth: Math.min(220, Math.max(120, titleMetrics.width + 10))
-                    Layout.maximumWidth: 220
+                    Layout.preferredWidth: Math.min(230, Math.max(136, titleMetrics.width + 12))
+                    Layout.maximumWidth: 230
                     Layout.preferredHeight: Design.hSmall
                     leftPadding: 0
                     rightPadding: 0
@@ -490,36 +492,39 @@ ApplicationWindow {
                 Text {
                     objectName: "dirtyBadge"
                     visible: Backend.dirty
-                    text: "unsaved"
+                    text: "UNSAVED"
                     color: Design.textSecondary
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tMicro
-                    font.letterSpacing: 0.4
+                    font.letterSpacing: 0.5
                 }
 
                 Text {
                     objectName: "importingBadge"
                     visible: Backend.importing > 0
-                    text: "preparing"
+                    text: "PREPARING"
                     color: Design.textSecondary
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tMicro
-                    font.letterSpacing: 0.4
+                    font.letterSpacing: 0.5
                 }
 
-                Rectangle { width: 1; height: 14; color: Design.borderHairline }
+                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
 
-                ActionButton { text: "Import"; flat: true; horizontalPadding: Design.s3; onClicked: importDialog.open() }
-                ActionButton { text: "Open"; flat: true; horizontalPadding: Design.s3; onClicked: openProjectDialog.open() }
+                ActionButton { text: "Import"; flat: true; horizontalPadding: Design.s2; onClicked: importDialog.open() }
+                ActionButton { text: "Open"; flat: true; horizontalPadding: Design.s2; onClicked: openProjectDialog.open() }
                 ActionButton {
                     text: "Save"
                     flat: true
-                    horizontalPadding: Design.s3
+                    horizontalPadding: Design.s2
                     onClicked: {
                         if (Backend.projectPath.length > 0) Backend.saveProject()
                         else saveProjectDialog.open()
                     }
                 }
-                ActionButton { text: "Undo"; flat: true; horizontalPadding: Design.s3; enabled: Backend.canUndo; onClicked: Backend.undo() }
-                ActionButton { text: "Redo"; flat: true; horizontalPadding: Design.s3; enabled: Backend.canRedo; onClicked: Backend.redo() }
+                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
+                ActionButton { text: "Undo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canUndo; onClicked: Backend.undo() }
+                ActionButton { text: "Redo"; flat: true; horizontalPadding: Design.s2; enabled: Backend.canRedo; onClicked: Backend.redo() }
 
                 Item {
                     Layout.fillWidth: true
@@ -531,6 +536,7 @@ ApplicationWindow {
                     objectName: "topBarStatus"
                     text: Backend.statusMessage
                     color: Design.textSecondary
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tCaption
                     elide: Text.ElideRight
                     horizontalAlignment: Text.AlignRight
@@ -553,7 +559,7 @@ ApplicationWindow {
                     objectName: "shortcutsButton"
                     text: "?"
                     flat: true
-                    horizontalPadding: Design.s3
+                    horizontalPadding: Design.s2
                     toolTipText: "Shortcuts (?)"
                     Accessible.name: "Keyboard shortcuts"
                     onClicked: shortcutsDialog.open()
@@ -585,9 +591,9 @@ ApplicationWindow {
             MediaBinPanel {
                 objectName: "mediaBinPanel"
                 onImportRequested: importDialog.open()
-                SplitView.preferredWidth: 260
-                SplitView.minimumWidth: 210
-                SplitView.maximumWidth: 380
+                SplitView.preferredWidth: 272
+                SplitView.minimumWidth: 200
+                SplitView.maximumWidth: 400
             }
 
             // 1px seams are the structure: no cards, no rounded panels.
@@ -601,7 +607,7 @@ ApplicationWindow {
                 objectName: "previewPanel"
                 onImportRequested: importDialog.open()
                 SplitView.fillWidth: true
-                SplitView.minimumWidth: 400
+                SplitView.minimumWidth: 340
             }
 
             Rectangle {
@@ -614,16 +620,16 @@ ApplicationWindow {
                 objectName: "inspectorPanel"
                 onSrtImportRequested: importSrtDialog.open()
                 onSrtExportRequested: exportSrtDialog.open()
-                SplitView.preferredWidth: 300
-                SplitView.minimumWidth: 250
-                SplitView.maximumWidth: 420
+                SplitView.preferredWidth: 320
+                SplitView.minimumWidth: 230
+                SplitView.maximumWidth: 440
             }
         }
 
         // Bottom Timeline
         Rectangle {
             Layout.fillWidth: true
-            height: Design.gutter
+            Layout.preferredHeight: Design.gutter
             color: Design.borderHairline
         }
 
@@ -631,8 +637,8 @@ ApplicationWindow {
             id: timelinePanel
             objectName: "timelinePanel"
             Layout.fillWidth: true
-            Layout.preferredHeight: 248
-            Layout.minimumHeight: 170
+            Layout.preferredHeight: 278
+            Layout.minimumHeight: 180
         }
     }
 }

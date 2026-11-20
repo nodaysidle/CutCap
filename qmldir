@@ -1,2 +1,3 @@
 module CutCap
+depends QtQuick auto
 typeinfo cutcap.qmltypes

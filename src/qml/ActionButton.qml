@@ -30,7 +30,7 @@ Rectangle {
     Accessible.description: toolTipText
     Accessible.onPressAction: clicked()
 
-    implicitWidth: label.implicitWidth + 2 * horizontalPadding
+    implicitWidth: Math.max(Design.hCompact, label.implicitWidth + 2 * horizontalPadding)
     implicitHeight: Math.max(Design.hCompact, label.implicitHeight + 2 * verticalPadding)
     radius: Design.rMd
     opacity: enabled ? 1.0 : 0.45
@@ -46,12 +46,14 @@ Rectangle {
         return flat ? "transparent" : fillColor
     }
     Behavior on color { ColorAnimation { duration: Design.msFast; easing.type: Easing.OutQuad } }
+    Behavior on opacity { NumberAnimation { duration: Design.msFast; easing.type: Easing.OutQuad } }
 
     Text {
         id: label
         anchors.centerIn: parent
         text: root.text
         color: root.textColor
+        font.family: Design.fontUi
         font.pixelSize: root.fontPixelSize
         font.weight: root.fontBold ? Design.wSemibold : Design.wMedium
         horizontalAlignment: Text.AlignHCenter

@@ -95,7 +95,7 @@ Dialog {
                                 anchors.centerIn: parent
                                 text: delegateRoot1.modelData[0]
                                 color: Design.accent
-                                font.family: "monospace"
+                                font.family: Design.fontMono
                                 font.pixelSize: Design.tCaption
                             }
                         }

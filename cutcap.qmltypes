@@ -858,11 +858,29 @@ Module {
             isPropertyConstant: true
         }
         Property {
+            name: "fontUi"
+            type: "QString"
+            read: "fontUi"
+            index: 8
+            lineNumber: 32
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "fontMono"
+            type: "QString"
+            read: "fontMono"
+            index: 9
+            lineNumber: 33
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
             name: "tMicro"
             type: "int"
             read: "tMicro"
-            index: 8
-            lineNumber: 32
+            index: 10
+            lineNumber: 34
             isReadonly: true
             isPropertyConstant: true
         }
@@ -870,8 +888,8 @@ Module {
             name: "tCaption"
             type: "int"
             read: "tCaption"
-            index: 9
-            lineNumber: 33
+            index: 11
+            lineNumber: 35
             isReadonly: true
             isPropertyConstant: true
         }
@@ -879,8 +897,8 @@ Module {
             name: "tBody"
             type: "int"
             read: "tBody"
-            index: 10
-            lineNumber: 34
+            index: 12
+            lineNumber: 36
             isReadonly: true
             isPropertyConstant: true
         }
@@ -888,8 +906,8 @@ Module {
             name: "tBodyLg"
             type: "int"
             read: "tBodyLg"
-            index: 11
-            lineNumber: 35
+            index: 13
+            lineNumber: 37
             isReadonly: true
             isPropertyConstant: true
         }
@@ -897,8 +915,8 @@ Module {
             name: "tTitle"
             type: "int"
             read: "tTitle"
-            index: 12
-            lineNumber: 36
+            index: 14
+            lineNumber: 38
             isReadonly: true
             isPropertyConstant: true
         }
@@ -906,8 +924,8 @@ Module {
             name: "tDisplay"
             type: "int"
             read: "tDisplay"
-            index: 13
-            lineNumber: 37
+            index: 15
+            lineNumber: 39
             isReadonly: true
             isPropertyConstant: true
         }
@@ -915,8 +933,8 @@ Module {
             name: "wRegular"
             type: "int"
             read: "wRegular"
-            index: 14
-            lineNumber: 38
+            index: 16
+            lineNumber: 40
             isReadonly: true
             isPropertyConstant: true
         }
@@ -924,8 +942,8 @@ Module {
             name: "wMedium"
             type: "int"
             read: "wMedium"
-            index: 15
-            lineNumber: 39
+            index: 17
+            lineNumber: 41
             isReadonly: true
             isPropertyConstant: true
         }
@@ -933,8 +951,8 @@ Module {
             name: "wSemibold"
             type: "int"
             read: "wSemibold"
-            index: 16
-            lineNumber: 40
+            index: 18
+            lineNumber: 42
             isReadonly: true
             isPropertyConstant: true
         }
@@ -942,8 +960,8 @@ Module {
             name: "hCompact"
             type: "int"
             read: "hCompact"
-            index: 17
-            lineNumber: 43
+            index: 19
+            lineNumber: 45
             isReadonly: true
             isPropertyConstant: true
         }
@@ -951,8 +969,8 @@ Module {
             name: "hSmall"
             type: "int"
             read: "hSmall"
-            index: 18
-            lineNumber: 44
+            index: 20
+            lineNumber: 46
             isReadonly: true
             isPropertyConstant: true
         }
@@ -960,8 +978,8 @@ Module {
             name: "hStd"
             type: "int"
             read: "hStd"
-            index: 19
-            lineNumber: 45
+            index: 21
+            lineNumber: 47
             isReadonly: true
             isPropertyConstant: true
         }
@@ -969,8 +987,8 @@ Module {
             name: "hLarge"
             type: "int"
             read: "hLarge"
-            index: 20
-            lineNumber: 46
+            index: 22
+            lineNumber: 48
             isReadonly: true
             isPropertyConstant: true
         }
@@ -978,8 +996,8 @@ Module {
             name: "rowH"
             type: "int"
             read: "rowH"
-            index: 21
-            lineNumber: 47
+            index: 23
+            lineNumber: 49
             isReadonly: true
             isPropertyConstant: true
         }
@@ -987,8 +1005,8 @@ Module {
             name: "trackH"
             type: "int"
             read: "trackH"
-            index: 22
-            lineNumber: 48
+            index: 24
+            lineNumber: 50
             isReadonly: true
             isPropertyConstant: true
         }
@@ -996,8 +1014,8 @@ Module {
             name: "topBarH"
             type: "int"
             read: "topBarH"
-            index: 23
-            lineNumber: 49
+            index: 25
+            lineNumber: 51
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1005,8 +1023,8 @@ Module {
             name: "gutter"
             type: "int"
             read: "gutter"
-            index: 24
-            lineNumber: 50
+            index: 26
+            lineNumber: 52
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1014,8 +1032,8 @@ Module {
             name: "rXs"
             type: "int"
             read: "rXs"
-            index: 25
-            lineNumber: 53
+            index: 27
+            lineNumber: 55
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1024,8 +1042,8 @@ Module {
             type: "int"
             read: "rSm"
             notify: "changed"
-            index: 26
-            lineNumber: 54
+            index: 28
+            lineNumber: 56
             isReadonly: true
         }
         Property {
@@ -1033,8 +1051,8 @@ Module {
             type: "int"
             read: "rMd"
             notify: "changed"
-            index: 27
-            lineNumber: 55
+            index: 29
+            lineNumber: 57
             isReadonly: true
         }
         Property {
@@ -1042,16 +1060,16 @@ Module {
             type: "int"
             read: "rLg"
             notify: "changed"
-            index: 28
-            lineNumber: 56
+            index: 30
+            lineNumber: 58
             isReadonly: true
         }
         Property {
             name: "msFast"
             type: "int"
             read: "msFast"
-            index: 29
-            lineNumber: 59
+            index: 31
+            lineNumber: 61
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1059,8 +1077,8 @@ Module {
             name: "msBase"
             type: "int"
             read: "msBase"
-            index: 30
-            lineNumber: 60
+            index: 32
+            lineNumber: 62
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1068,8 +1086,8 @@ Module {
             name: "msSlow"
             type: "int"
             read: "msSlow"
-            index: 31
-            lineNumber: 61
+            index: 33
+            lineNumber: 63
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1078,8 +1096,8 @@ Module {
             type: "QString"
             read: "surfaceSunken"
             notify: "changed"
-            index: 32
-            lineNumber: 64
+            index: 34
+            lineNumber: 66
             isReadonly: true
         }
         Property {
@@ -1087,8 +1105,8 @@ Module {
             type: "QString"
             read: "surfacePanel"
             notify: "changed"
-            index: 33
-            lineNumber: 65
+            index: 35
+            lineNumber: 67
             isReadonly: true
         }
         Property {
@@ -1096,8 +1114,8 @@ Module {
             type: "QString"
             read: "surfaceRaised"
             notify: "changed"
-            index: 34
-            lineNumber: 66
+            index: 36
+            lineNumber: 68
             isReadonly: true
         }
         Property {
@@ -1105,8 +1123,8 @@ Module {
             type: "QString"
             read: "surfaceOverlay"
             notify: "changed"
-            index: 35
-            lineNumber: 67
+            index: 37
+            lineNumber: 69
             isReadonly: true
         }
         Property {
@@ -1114,8 +1132,8 @@ Module {
             type: "QString"
             read: "borderHairline"
             notify: "changed"
-            index: 36
-            lineNumber: 70
+            index: 38
+            lineNumber: 72
             isReadonly: true
         }
         Property {
@@ -1123,8 +1141,8 @@ Module {
             type: "QString"
             read: "borderStrong"
             notify: "changed"
-            index: 37
-            lineNumber: 71
+            index: 39
+            lineNumber: 73
             isReadonly: true
         }
         Property {
@@ -1132,8 +1150,8 @@ Module {
             type: "QString"
             read: "focusRing"
             notify: "changed"
-            index: 38
-            lineNumber: 72
+            index: 40
+            lineNumber: 74
             isReadonly: true
         }
         Property {
@@ -1141,8 +1159,8 @@ Module {
             type: "QString"
             read: "textPrimary"
             notify: "changed"
-            index: 39
-            lineNumber: 75
+            index: 41
+            lineNumber: 77
             isReadonly: true
         }
         Property {
@@ -1150,8 +1168,8 @@ Module {
             type: "QString"
             read: "textSecondary"
             notify: "changed"
-            index: 40
-            lineNumber: 76
+            index: 42
+            lineNumber: 78
             isReadonly: true
         }
         Property {
@@ -1159,8 +1177,8 @@ Module {
             type: "QString"
             read: "textDisabled"
             notify: "changed"
-            index: 41
-            lineNumber: 77
+            index: 43
+            lineNumber: 79
             isReadonly: true
         }
         Property {
@@ -1168,8 +1186,8 @@ Module {
             type: "QString"
             read: "accent"
             notify: "changed"
-            index: 42
-            lineNumber: 80
+            index: 44
+            lineNumber: 82
             isReadonly: true
         }
         Property {
@@ -1177,8 +1195,8 @@ Module {
             type: "QString"
             read: "onAccent"
             notify: "changed"
-            index: 43
-            lineNumber: 81
+            index: 45
+            lineNumber: 83
             isReadonly: true
         }
         Property {
@@ -1186,8 +1204,8 @@ Module {
             type: "QString"
             read: "success"
             notify: "changed"
-            index: 44
-            lineNumber: 82
+            index: 46
+            lineNumber: 84
             isReadonly: true
         }
         Property {
@@ -1195,8 +1213,8 @@ Module {
             type: "QString"
             read: "warning"
             notify: "changed"
-            index: 45
-            lineNumber: 83
+            index: 47
+            lineNumber: 85
             isReadonly: true
         }
         Property {
@@ -1204,8 +1222,8 @@ Module {
             type: "QString"
             read: "danger"
             notify: "changed"
-            index: 46
-            lineNumber: 84
+            index: 48
+            lineNumber: 86
             isReadonly: true
         }
         Property {
@@ -1213,8 +1231,8 @@ Module {
             type: "QString"
             read: "info"
             notify: "changed"
-            index: 47
-            lineNumber: 85
+            index: 49
+            lineNumber: 87
             isReadonly: true
         }
         Property {
@@ -1222,8 +1240,8 @@ Module {
             type: "QString"
             read: "laneV2"
             notify: "changed"
-            index: 48
-            lineNumber: 88
+            index: 50
+            lineNumber: 90
             isReadonly: true
         }
         Property {
@@ -1231,8 +1249,8 @@ Module {
             type: "QString"
             read: "laneV1"
             notify: "changed"
-            index: 49
-            lineNumber: 89
+            index: 51
+            lineNumber: 91
             isReadonly: true
         }
         Property {
@@ -1240,8 +1258,8 @@ Module {
             type: "QString"
             read: "laneText"
             notify: "changed"
-            index: 50
-            lineNumber: 90
+            index: 52
+            lineNumber: 92
             isReadonly: true
         }
         Property {
@@ -1249,16 +1267,16 @@ Module {
             type: "QString"
             read: "laneAudio"
             notify: "changed"
-            index: 51
-            lineNumber: 91
+            index: 53
+            lineNumber: 93
             isReadonly: true
         }
-        Signal { name: "changed"; lineNumber: 161 }
+        Signal { name: "changed"; lineNumber: 166 }
         Method {
             name: "alpha"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 157
+            lineNumber: 162
             Parameter { name: "hex"; type: "QString" }
             Parameter { name: "alpha"; type: "double" }
         }
@@ -1266,7 +1284,7 @@ Module {
             name: "mix"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 158
+            lineNumber: 163
             Parameter { name: "a"; type: "QString" }
             Parameter { name: "b"; type: "QString" }
             Parameter { name: "t"; type: "double" }

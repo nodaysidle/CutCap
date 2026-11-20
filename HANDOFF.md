@@ -201,3 +201,87 @@ The clang-tidy command in the section above needs `-I$Q/QtNetwork` now that `the
 `BUILD_DIR`. The installed copy on this machine is `~/.local/bin/cutcap` with
 `~/.local/share/applications/cutcap.desktop` and the hicolor icon, and the app is in
 `omarchy-menu` under Apps as `apps.cutcap`.
+
+---
+
+## Frontend and release note — 2026-11-16
+
+The later `frontend-design` pass is complete but **not committed**. Changed files are `DESIGN.md`,
+`cutcap.qmltypes`, `src/design.h`, `src/main.cpp`, `ActionButton.qml`, `Main.qml`,
+`MediaBinPanel.qml`, `PreviewPanel.qml`, `TimelinePanel.qml`, `InspectorPanel.qml`,
+`ExportDialog.qml`, `ShortcutsDialog.qml` and `tests/cutcap_tests.cpp`.
+
+What changed: the type scale is now 12–24 px with `Nimbus Sans` for UI and `JetBrains Mono` for
+technical values; controls are 24–38 px with a tested 24 px minimum target floor; the top bar,
+source bin, viewer, transport, inspector and timeline have stronger hierarchy; the viewer uses a
+monitor-style header, crop marks and a focused intake state; source rows carry media-kind stripes;
+lane toggles, transition chips, reset actions and both colour-swatch sets are keyboard accessible.
+The app remains theme-driven and has no new dependencies or network calls.
+
+Verification: the fresh out-of-tree release build succeeded; `./bin/test` reports **41 passed, 0
+failed**; layout audits pass at **1280×800, 900×600 and 880×580**; and qmllint exits successfully
+with zero errors. The added target-size guard was deliberately broken, observed failing, restored,
+and then passed.
+
+Release state: generated leftovers (`build/`, `pkgbuild/src/`, `.optim-jev/`, `.ignore` and
+`graft/`) were removed, and no `build/` directory is intentionally present now. The current binary
+was rebuilt in a temporary directory and installed user-locally at `~/.local/bin/cutcap`, with the
+desktop entry and hicolor icon refreshed. `omarchy menu refresh` succeeded, and the Apps action
+`uwsm-app -- gtk-launch cutcap.desktop` launched the installed app. This is not a pacman package
+install. If `Nimbus Sans` or `JetBrains Mono` is unavailable, Qt falls back to installed fonts.
+
+---
+
+## Tiling, lint & packaging pass — 2026-11-17
+
+Audit follow-up (still **uncommitted** on top of the `frontend-design` working tree). Changed files
+added in this pass: `src/qml/Main.qml`, `qmldir`, `LICENSE`, `pkgbuild/PKGBUILD` and
+`tests/cutcap_tests.cpp`.
+
+What changed:
+- **Hyprland / tiling window floor (`src/qml/Main.qml`, `tests/cutcap_tests.cpp`):** lowered the
+  window minimum from `880×580` to `780×500` (`MediaBinPanel` 200 px, `PreviewPanel` 340 px,
+  `InspectorPanel` 230 px, `TimelinePanel` 180 px) and added a `780×500` layout audit to
+  `uiSmokeButtonsPipAndDrop`.
+- **Layout & QML lint (`src/qml/Main.qml`, `qmldir`):** converted the `RowLayout`/`ColumnLayout`
+  hairline dividers in `Main.qml` to `Layout.preferredWidth`/`Layout.preferredHeight`, and added
+  `depends QtQuick auto` to `qmldir` (clearing the 3 `PreviewLane.qml` unresolved-type warnings).
+- **Packaging & hygiene (`LICENSE`, `pkgbuild/PKGBUILD`):** added the MIT `LICENSE` file and
+  installed it in `PKGBUILD` (`$pkgdir/usr/share/licenses/$pkgname/LICENSE`), and removed the
+  leftover `.optim-jev/`, `.ignore` and `graft/` directories.
+
+Verification: out-of-tree release build succeeded (`BUILD_DIR=/tmp/cutcap-build ./bin/build`);
+`./bin/test` reports **41 passed, 0 failed** (including `780×500`); `qmllint` exits `0` with no
+unresolved-type warnings; installed to `~/.local/bin/cutcap` with `~/.local/share/applications/cutcap.desktop`
+and hicolor icon refreshed, and `omarchy menu refresh` returned `ok`.
+
+---
+
+## Audit and fix run — 2026-11-20 (in progress)
+
+Goal: a second full audit (code plus UI/UX on Omarchy 4.5, Hyprland scrolling layout, one
+2560×1440 monitor at scale 1) found 17 findings; the owner asked for all of them to be fixed by
+Haiku subagents, each from a written plan, each reviewed before the next starts.
+
+Where the work is: branch `advisor/audit-fixes`, checked out as a separate git worktree (path in
+`git worktree list`). Its first commit is a snapshot of the uncommitted working tree described in
+the two sections above; every fix is one commit on top. The main working tree is not edited by this
+run apart from this section. Nothing is merged or pushed; merging is the owner's call.
+
+Plans and status: `plans/README.md` on that branch (one file per plan, status column kept current).
+That index is the list of what is done and what is left.
+
+Findings, in short: startup cache sweep deletes voiceover/TTS/rembg media; single-key shortcuts
+fire behind modal dialogs and Space never activates a focused button; medium/semibold text renders
+italic (Nimbus Sans has no 500/600 weight); `.cutcap` paths reach ffmpeg unchecked (network URLs);
+multi-file import continues into the next project and a failed Open drops running jobs; layout
+breaks below 780×500, which Hyprland hands tiled windows, and the timeline height is fixed; closing
+mid-export or mid-recording asks nothing; every edit rebuilds all timeline models; preview look
+runs on the CPU even when hidden; auto-captions ignore trim/speed; caption ids repeat; undo drops
+previews; filmstrip and ruler are not culled; the ASS backslash fix is wrong; tests leak into
+`~/.cache/cutcap_tests` and `/tmp`; no test opens a project, finishes an export or runs the CLI;
+an image clip on the audio track breaks export.
+
+Open questions for the owner: the UI font moves from Nimbus Sans to Adwaita Sans (has real 500/600
+weights; one token to revert); below the window minimum the inspector, then the media bin, hide
+automatically; the clip-model work is the caching step only, a full list model is deferred.

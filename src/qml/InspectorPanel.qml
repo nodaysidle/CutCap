@@ -23,6 +23,7 @@ Rectangle {
     // Section label: small, secondary, sentence case, above a hairline rule. No shouting.
     component SectionLabel: Text {
         color: Design.textSecondary
+        font.family: Design.fontUi
         font.pixelSize: Design.tCaption
         font.weight: Design.wMedium
         font.letterSpacing: 0.2
@@ -54,8 +55,8 @@ Rectangle {
                 horizontalAlignment: TextInput.AlignRight
                 verticalAlignment: TextInput.AlignVCenter
                 color: Design.textPrimary
+                font.family: Design.fontMono
                 font.pixelSize: Design.tCaption
-                font.family: "monospace"
                 text: Number(row.value).toFixed(row.decimals)
                 selectByMouse: true
                 leftPadding: Design.s2
@@ -80,24 +81,15 @@ Rectangle {
                     }
                 }
             }
-            Rectangle {
-                implicitWidth: Design.hCompact - 4
-                implicitHeight: Design.hCompact - 4
-                radius: Design.rXs
-                color: resetMouse.containsMouse ? Design.surfaceRaised : "transparent"
-                border.width: 1
-                border.color: Design.borderHairline
-                Text { anchors.centerIn: parent; text: "↺"; color: Design.textSecondary; font.pixelSize: Design.tCaption }
-                MouseArea {
-                    id: resetMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: row.edited(row.defaultValue)
-                }
-                ToolTip.visible: resetMouse.containsMouse
-                ToolTip.text: "Reset to " + Number(row.defaultValue).toFixed(row.decimals)
-                ToolTip.delay: 400
+            ActionButton {
+                text: "↺"
+                flat: true
+                implicitWidth: Design.hCompact
+                horizontalPadding: Design.s2
+                verticalPadding: 0
+                Accessible.name: "Reset " + row.label
+                toolTipText: "Reset to " + Number(row.defaultValue).toFixed(row.decimals)
+                onClicked: row.edited(row.defaultValue)
             }
         }
         CompactSlider {
@@ -125,7 +117,55 @@ Rectangle {
         implicitHeight: Design.hStd
         topInset: 0
         bottomInset: 0
+        font.family: Design.fontUi
         font.pixelSize: Design.tBody
+    }
+
+    component ColorSwatch: Item {
+        id: swatch
+        property string value: ""
+        property string label: ""
+        property bool selected: false
+        signal picked()
+
+        width: Design.hCompact
+        height: Design.hCompact
+        activeFocusOnTab: true
+        Accessible.role: Accessible.RadioButton
+        Accessible.name: swatch.label
+        Accessible.checked: swatch.selected
+        Accessible.onPressAction: swatch.picked()
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Design.hCompact - Design.s2
+            height: Design.hCompact - Design.s2
+            radius: Design.rXs
+            color: swatch.value
+            border.color: swatch.selected ? Design.textPrimary : Design.borderHairline
+            border.width: 2
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: Design.rSm
+            color: "transparent"
+            border.width: swatch.activeFocus ? 2 : 0
+            border.color: Design.focusRing
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                swatch.forceActiveFocus()
+                swatch.picked()
+            }
+        }
+        Keys.onSpacePressed: swatch.picked()
+        Keys.onReturnPressed: swatch.picked()
+        HoverHandler { id: hoverHandler }
+        ToolTip.visible: hoverHandler.hovered
+        ToolTip.text: swatch.label
+        ToolTip.delay: 400
     }
 
     component CollapsibleSection: Item {
@@ -154,11 +194,22 @@ Rectangle {
                 border.color: Design.focusRing
                 activeFocusOnTab: true
 
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Design.s2
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 2
+                    height: Design.s4 + Design.s2
+                    color: section.expanded ? Design.textPrimary : Design.borderStrong
+                }
+
                 Keys.onSpacePressed: section.expanded = !section.expanded
                 Keys.onReturnPressed: section.expanded = !section.expanded
 
                 RowLayout {
                     anchors.fill: parent
+                    anchors.leftMargin: Design.s5
+                    anchors.rightMargin: Design.s2
                     spacing: Design.s2
 
                     MouseArea {
@@ -266,14 +317,26 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !root.hasClip && !root.hasText
-            Text {
+            Column {
                 anchors.centerIn: parent
                 width: parent.width - Design.s6 * 2
-                text: "Select a clip or text overlay\non the timeline to edit\neffects, audio, or keyframes"
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                color: Design.textSecondary
-                font.pixelSize: Design.tBody
+                spacing: Design.s3
+                Text {
+                    width: parent.width
+                    text: "Nothing selected"
+                    color: Design.textPrimary
+                    font.pixelSize: Design.tTitle
+                    font.weight: Design.wSemibold
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                Text {
+                    width: parent.width
+                    text: "Select a clip or text overlay on the timeline to edit effects, audio, and keyframes."
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: Design.textSecondary
+                    font.pixelSize: Design.tBody
+                }
             }
         }
 
@@ -351,18 +414,13 @@ Rectangle {
                     spacing: Design.s3
                     Repeater {
                         model: ["#eceff4", Design.warning, Design.info, Design.success, Design.danger, Design.laneV2]
-                        delegate: Rectangle {
-                            id: delegateRoot1
+                        delegate: ColorSwatch {
+                            id: textSwatchDelegate
                             required property var modelData
-                            width: 24; height: 24; radius: width / 2
-                            color: delegateRoot1.modelData
-                            border.color: (root.hasText && root.selText.color === delegateRoot1.modelData) ? Design.accent : Design.borderHairline
-                            border.width: 2
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Backend.updateTextProperty(root.selText.id, "color", delegateRoot1.modelData)
-                            }
+                            value: textSwatchDelegate.modelData
+                            label: "Text colour " + textSwatchDelegate.modelData
+                            selected: root.hasText && root.selText.color === textSwatchDelegate.modelData
+                            onPicked: Backend.updateTextProperty(root.selText.id, "color", textSwatchDelegate.modelData)
                         }
                     }
                 }
@@ -668,42 +726,13 @@ Rectangle {
                                 { value: "#14161a", name: "Graphite" },
                                 { value: "#eceff4", name: "White" }
                             ]
-                            delegate: Item {
+                            delegate: ColorSwatch {
+                                id: keySwatchDelegate
                                 required property var modelData
-                                id: swatch
-                                width: 24
-                                height: 24
-                                activeFocusOnTab: true
-                                Accessible.role: Accessible.RadioButton
-                                Accessible.name: swatch.modelData.name + " key colour"
-                                Accessible.checked: root.hasClip && root.selClip.chromaColor === swatch.modelData.value
-                                Accessible.onPressAction: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 20
-                                    height: 20
-                                    radius: Design.rXs
-                                    color: swatch.modelData.value
-                                    border.color: (root.hasClip && root.selClip.chromaColor === swatch.modelData.value) ? Design.accent : Design.borderHairline
-                                    border.width: 2
-                                }
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: Design.rSm
-                                    color: "transparent"
-                                    border.width: swatch.activeFocus ? 2 : 0
-                                    border.color: Design.focusRing
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        swatch.forceActiveFocus()
-                                        Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
-                                    }
-                                }
-                                Keys.onSpacePressed: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
-                                Keys.onReturnPressed: Backend.updateClipProperty(root.selClip.id, "chromaColor", swatch.modelData.value)
+                                value: keySwatchDelegate.modelData.value
+                                label: keySwatchDelegate.modelData.name + " key colour"
+                                selected: root.hasClip && root.selClip.chromaColor === keySwatchDelegate.modelData.value
+                                onPicked: Backend.updateClipProperty(root.selClip.id, "chromaColor", keySwatchDelegate.modelData.value)
                             }
                         }
                     }

@@ -10,7 +10,7 @@ Rectangle {
     id: root
 
     signal importRequested()
-    color: Design.surfacePanel
+    color: Design.surfaceSunken
     radius: 0
     border.width: 0
     clip: true
@@ -41,10 +41,47 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 8
+        anchors.margins: Design.s5
+        spacing: Design.s3
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Design.hSmall
+            spacing: Design.s2
+
+            Rectangle {
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: 6
+                implicitHeight: 6
+                radius: width / 2
+                color: Backend.playing ? Design.accent : Design.success
+            }
+            Text {
+                text: Backend.playing ? "PROGRAM" : "VIEWER"
+                color: Design.textPrimary
+                font.family: Design.fontMono
+                font.pixelSize: Design.tMicro
+                font.weight: Design.wMedium
+                font.letterSpacing: 0.8
+            }
+            Text {
+                text: Backend.projectWidth + " × " + Backend.projectHeight
+                color: Design.textSecondary
+                font.family: Design.fontMono
+                font.pixelSize: Design.tMicro
+            }
+            Item { Layout.fillWidth: true }
+            Text {
+                text: "LOCAL"
+                color: Design.textSecondary
+                font.family: Design.fontMono
+                font.pixelSize: Design.tMicro
+                font.letterSpacing: 0.8
+            }
+        }
 
         Item {
+            id: stage
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -57,7 +94,7 @@ Rectangle {
                 // An empty project has no picture, so it shows the themed bed and a prompt in theme
                 // ink; black would make the prompt unreadable in a light theme. Playback is black.
                 readonly property bool emptyProject: Backend.clipsList.length === 0 && Backend.textsList.length === 0
-                color: emptyProject ? Design.surfaceSunken : "#000000"
+                color: emptyProject ? Design.surfacePanel : "#000000"
                 clip: true
                 border.color: Design.borderHairline
                 border.width: 1
@@ -81,22 +118,25 @@ Rectangle {
                     lane: Backend.overlayLane
                 }
 
-                // A gap in the timeline plays as black, like the export. Only an empty project gets a prompt.
+                // A gap in the timeline plays as black, like the export. Only an empty project gets
+                // the intake slate, with one clear action instead of competing empty states.
                 Column {
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: Design.s3
                     visible: parent.emptyProject
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Drop video, audio or images here"
+                        text: "Start with a cut."
                         color: Design.textPrimary
-                        font.pixelSize: Design.tBodyLg
+                        font.pixelSize: Design.tDisplay
+                        font.weight: Design.wSemibold
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "or press Ctrl+O to choose files"
+                        text: "Drop video, images, or audio here.\nCtrl+O also opens files."
                         color: Design.textSecondary
                         font.pixelSize: Design.tBody
+                        horizontalAlignment: Text.AlignHCenter
                     }
                     ActionButton {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -107,6 +147,18 @@ Rectangle {
                         verticalPadding: Design.s3
                         onClicked: root.importRequested()
                     }
+                }
+
+                Text {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: Design.s4
+                    visible: parent.emptyProject
+                    text: "00:00:00"
+                    color: Design.textSecondary
+                    opacity: 0.18
+                    font.family: Design.fontMono
+                    font.pixelSize: Design.tDisplay
                 }
 
                 Repeater {
@@ -147,6 +199,48 @@ Rectangle {
                     }
                 }
             }
+
+            // Crop marks sit on the matte, never over the exported picture.
+            Rectangle {
+                x: canvasBox.x - Design.s5; y: canvasBox.y
+                width: Design.s5; height: 1
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x; y: canvasBox.y - Design.s5
+                width: 1; height: Design.s5
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x + canvasBox.width; y: canvasBox.y
+                width: Design.s5; height: 1
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x + canvasBox.width - 1; y: canvasBox.y - Design.s5
+                width: 1; height: Design.s5
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x - Design.s5; y: canvasBox.y + canvasBox.height
+                width: Design.s5; height: 1
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x; y: canvasBox.y + canvasBox.height
+                width: 1; height: Design.s5
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x + canvasBox.width; y: canvasBox.y + canvasBox.height
+                width: Design.s5; height: 1
+                color: Design.textSecondary; opacity: 0.55
+            }
+            Rectangle {
+                x: canvasBox.x + canvasBox.width - 1; y: canvasBox.y + canvasBox.height
+                width: 1; height: Design.s5
+                color: Design.textSecondary; opacity: 0.55
+            }
         }
 
         // Transport: a flat strip on a hairline, timecode left, transport centre, format right.
@@ -169,7 +263,7 @@ Rectangle {
                     objectName: "transportPlayhead"
                     text: Backend.formatTimecode(Backend.playheadSec)
                     color: Design.textPrimary
-                    font.family: "monospace"
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tBody
                     font.weight: Design.wMedium
                 }
@@ -179,11 +273,13 @@ Rectangle {
                     visible: transportRow.width >= 400
                     text: "/ " + Backend.formatTimecode(Backend.totalDuration)
                     color: Design.textSecondary
-                    font.family: "monospace"
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tMicro
                 }
 
                 Item { Layout.fillWidth: true }
+
+                Rectangle { implicitWidth: 1; implicitHeight: Design.s4; color: Design.borderHairline }
 
                 ActionButton {
                     objectName: "transportStepBack"
@@ -213,16 +309,19 @@ Rectangle {
                     onClicked: Backend.playheadSec = Backend.playheadSec + 1.0
                 }
 
+                Rectangle { implicitWidth: 1; implicitHeight: Design.s4; color: Design.borderHairline }
+
                 Item { Layout.fillWidth: true }
 
                 ComboBox {
                     id: aspectCombo
                     objectName: "aspectCombo"
-                    model: ["16:9 1080p", "9:16 shorts", "1:1 square"]
+                    model: ["16:9", "9:16", "1:1"]
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tCaption
                     implicitHeight: Design.hSmall
-                    Layout.preferredWidth: 120
-                    Layout.maximumWidth: 132
+                    Layout.preferredWidth: 88
+                    Layout.maximumWidth: 96
                     leftPadding: Design.s2
                     topInset: 0
                     bottomInset: 0

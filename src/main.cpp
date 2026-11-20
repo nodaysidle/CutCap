@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QFont>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -31,6 +32,9 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion("0.1.0");
     app.setDesktopFileName("cutcap");
     app.setWindowIcon(QIcon::fromTheme("cutcap"));
+    QFont uiFont("Nimbus Sans");
+    uiFont.setStyleStrategy(QFont::PreferAntialias);
+    app.setFont(uiFont);
 
     QQuickStyle::setStyle("Material");
 

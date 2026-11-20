@@ -188,6 +188,8 @@ private slots:
         QVERIFY(d.tMicro() <= d.tCaption() && d.tCaption() <= d.tBody() && d.tBody() <= d.tBodyLg() &&
                 d.tBodyLg() < d.tTitle());
         QVERIFY(d.hCompact() < d.hSmall() && d.hSmall() < d.hStd() && d.hStd() < d.hLarge());
+        QVERIFY2(d.hCompact() >= 24, "pointer targets must stay at least 24 px high");
+        QVERIFY(!d.fontUi().isEmpty() && !d.fontMono().isEmpty());
         QVERIFY(d.rXs() < d.rSm() && d.rSm() < d.rMd() && d.rMd() < d.rLg());
         QVERIFY(d.hCompact() >= d.tBodyLg() + 8);   // a 24px control can hold 13px text with padding
         QVERIFY(contrastRatio(d.textPrimary(), d.surfacePanel()) >= 7.0);
@@ -1106,6 +1108,8 @@ private slots:
         // Track-header controls act on the lane they are labelled with, not on a neighbouring one.
         auto *v2Mute = findItem(window->contentItem(), "laneToggle_V2Overlay_M");
         QVERIFY2(v2Mute, "the V2 row must expose a mute toggle");
+        QVERIFY2(v2Mute->width() >= 24 && v2Mute->height() >= 24,
+                 qPrintable(QString("lane toggle is only %1x%2").arg(v2Mute->width()).arg(v2Mute->height())));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           v2Mute->mapToScene(QPointF(v2Mute->width() / 2, v2Mute->height() / 2)).toPoint());
         QTest::qWait(150);
@@ -1161,6 +1165,8 @@ private slots:
         auto *sectionTransform = findItem(inspectorColumn, "sectionTransform");
         auto *resetLooksBtn = findItem(inspectorColumn, "resetLooksButton");
         QVERIFY2(sectionLook && sectionTransform && resetLooksBtn, "look section, transform section and reset button must exist");
+        QVERIFY2(resetLooksBtn->height() >= 24,
+                 qPrintable(QString("reset action is only %1 px high").arg(resetLooksBtn->height())));
         backend.selectClip(baseClipId);
         QTest::qWait(80);
         QVERIFY(backend.selectedClip().value("saturation").toDouble() < 0.1);
@@ -1221,6 +1227,8 @@ private slots:
         QTest::qWait(150);
         auto *chip = findItem(window->contentItem(), "transitionChip_" + droppedId);
         QVERIFY2(chip, "a transition chip must appear where two clips touch");
+        QVERIFY2(chip->width() >= 24 && chip->height() >= 24,
+                 qPrintable(QString("transition chip is only %1x%2").arg(chip->width()).arg(chip->height())));
         auto *droppedBody = findClipBody(window->contentItem(), droppedId);
         QVERIFY(droppedBody);
         const qreal junctionX = droppedBody->mapToScene(QPointF(0, 0)).x();
@@ -1316,6 +1324,14 @@ private slots:
         window->resize(900, 600);
         QTest::qWait(400);
         auditViewportLayout("900x600");
+
+        window->resize(880, 580);
+        QTest::qWait(400);
+        auditViewportLayout("880x580");
+
+        window->resize(780, 500);
+        QTest::qWait(400);
+        auditViewportLayout("780x500");
 
         auto *timelineHScroll = findItem(window->contentItem(), "timelineHScroll");
         QVERIFY2(timelineHScroll, "timeline must have a horizontal scrollbar");

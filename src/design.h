@@ -28,25 +28,27 @@ class Design : public QObject {
     Q_PROPERTY(int s7 READ s7 CONSTANT)   // 24
     Q_PROPERTY(int s8 READ s8 CONSTANT)   // 32
 
-    // Type scale for dense desktop UI: 11-13px body, no display sizes inside panels.
+    // Type scale for a dense desktop editor. Technical values use the mono face below.
+    Q_PROPERTY(QString fontUi READ fontUi CONSTANT)
+    Q_PROPERTY(QString fontMono READ fontMono CONSTANT)
     Q_PROPERTY(int tMicro READ tMicro CONSTANT)      // 12 - kbd, ruler, badges
     Q_PROPERTY(int tCaption READ tCaption CONSTANT)  // 12 - labels, metadata
-    Q_PROPERTY(int tBody READ tBody CONSTANT)        // 12 - default text
-    Q_PROPERTY(int tBodyLg READ tBodyLg CONSTANT)    // 13 - values, clip names
-    Q_PROPERTY(int tTitle READ tTitle CONSTANT)      // 15 - panel title
-    Q_PROPERTY(int tDisplay READ tDisplay CONSTANT)  // 18 - empty-state headline
+    Q_PROPERTY(int tBody READ tBody CONSTANT)        // 13 - default text
+    Q_PROPERTY(int tBodyLg READ tBodyLg CONSTANT)    // 14 - values, clip names
+    Q_PROPERTY(int tTitle READ tTitle CONSTANT)      // 18 - panel title
+    Q_PROPERTY(int tDisplay READ tDisplay CONSTANT)  // 24 - empty-state headline
     Q_PROPERTY(int wRegular READ wRegular CONSTANT)  // 400
     Q_PROPERTY(int wMedium READ wMedium CONSTANT)    // 500
     Q_PROPERTY(int wSemibold READ wSemibold CONSTANT)// 600
 
-    // Control heights: 24 kbd/icon, 28 compact, 32 standard, 36 prominent.
-    Q_PROPERTY(int hCompact READ hCompact CONSTANT)  // 22
-    Q_PROPERTY(int hSmall READ hSmall CONSTANT)      // 26
-    Q_PROPERTY(int hStd READ hStd CONSTANT)          // 30
-    Q_PROPERTY(int hLarge READ hLarge CONSTANT)      // 34
-    Q_PROPERTY(int rowH READ rowH CONSTANT)          // 30 - list rows
-    Q_PROPERTY(int trackH READ trackH CONSTANT)       // 42 - timeline lane
-    Q_PROPERTY(int topBarH READ topBarH CONSTANT)     // 36
+    // Pointer targets never fall below 24 px.
+    Q_PROPERTY(int hCompact READ hCompact CONSTANT)  // 24
+    Q_PROPERTY(int hSmall READ hSmall CONSTANT)      // 28
+    Q_PROPERTY(int hStd READ hStd CONSTANT)          // 32
+    Q_PROPERTY(int hLarge READ hLarge CONSTANT)      // 38
+    Q_PROPERTY(int rowH READ rowH CONSTANT)          // 34 - list rows
+    Q_PROPERTY(int trackH READ trackH CONSTANT)       // 48 - timeline lane
+    Q_PROPERTY(int topBarH READ topBarH CONSTANT)     // 44
     Q_PROPERTY(int gutter READ gutter CONSTANT)       // 1 - the only gap between panels
 
     // Radii: sharp by design. Panels are square; only chips/controls round.
@@ -104,23 +106,26 @@ public:
     int s7() const { return 24; }
     int s8() const { return 32; }
 
+    QString fontUi() const { return QStringLiteral("Nimbus Sans"); }
+    QString fontMono() const { return QStringLiteral("JetBrains Mono"); }
+
     int tMicro() const { return 12; }
     int tCaption() const { return 12; }
-    int tBody() const { return 12; }
-    int tBodyLg() const { return 13; }
-    int tTitle() const { return 15; }
-    int tDisplay() const { return 18; }
+    int tBody() const { return 13; }
+    int tBodyLg() const { return 14; }
+    int tTitle() const { return 18; }
+    int tDisplay() const { return 24; }
     int wRegular() const { return 400; }
     int wMedium() const { return 500; }
     int wSemibold() const { return 600; }
 
-    int hCompact() const { return 22; }
-    int hSmall() const { return 26; }
-    int hStd() const { return 30; }
-    int hLarge() const { return 34; }
-    int rowH() const { return 30; }
-    int trackH() const { return 42; }
-    int topBarH() const { return 36; }
+    int hCompact() const { return 24; }
+    int hSmall() const { return 28; }
+    int hStd() const { return 32; }
+    int hLarge() const { return 38; }
+    int rowH() const { return 34; }
+    int trackH() const { return 48; }
+    int topBarH() const { return 44; }
     int gutter() const { return 1; }
 
     int rXs() const;

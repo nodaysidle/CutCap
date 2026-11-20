@@ -21,9 +21,11 @@ media bin left, viewer centre, inspector right, timeline across the bottom, one 
 structure is correct for the job — cutting clips — and is not the thing to redesign. What was
 missing was the layer underneath it.
 
-**Density target**: a desktop creative tool, not a mobile app. Body text 12–13 px, rows 24–32 px,
-controls 24–36 px tall. Reference: Linear/Raycast-style density for panels, CapCut's clip-first
-timeline for the bottom strip, Resolve for "one panel owns one job".
+**Density target**: a desktop creative tool, not a mobile app. Body text 12–14 px, rows 24–34 px,
+controls 24–38 px tall. Reference: Linear/Raycast-style density for panels, CapCut's clip-first
+timeline for the bottom strip, Resolve for "one panel owns one job". Every pointer target is at
+least 24 × 24 px (WCAG 2.2 target-size minimum); dense controls earn that size through good
+internal spacing rather than shrinking below the floor.
 
 **Accent budget**: the accent colour is spent on exactly four things — Play, the primary action,
 the focus ring, the playhead. Lane identity uses the theme's lane hues (V1 blue, V2 magenta,
@@ -61,25 +63,29 @@ live Omarchy theme so a theme switch restyles the app with no QML change.
 |---|---|---|---|
 | `tMicro` | 12 | 500 | ruler, kbd badges |
 | `tCaption` | 12 | 500 | section labels, metadata, buttons |
-| `tBody` | 12 | 400 | default text, list rows |
-| `tBodyLg` | 13 | 400/600 | values, clip names, panel title |
-| `tTitle` | 15 | 600 | dialog title |
-| `tDisplay` | 18 | 600 | empty-state headline |
+| `tBody` | 13 | 400 | default text, list rows |
+| `tBodyLg` | 14 | 400/600 | values, clip names, panel title |
+| `tTitle` | 18 | 600 | dialog title |
+| `tDisplay` | 24 | 600 | empty-state headline |
 
 Weights: `wRegular` 400, `wMedium` 500, `wSemibold` 600. No bold-as-structure: use a label tier
 and a hairline instead.
+
+Typography: `Nimbus Sans` carries the UI; `JetBrains Mono` carries timecode, ruler labels, numeric
+fields, shortcuts and technical status. The mono face makes changing values easy to scan without
+turning the whole interface into a terminal.
 
 ### Controls
 
 | Token | px | Use |
 |---|---|---|
-| `hCompact` | 22 | icon buttons, kbd chips, dense rows |
-| `hSmall` | 26 | compact buttons, sliders |
-| `hStd` | 30 | standard buttons, inputs |
-| `hLarge` | 34 | primary action, dialog buttons |
-| `rowH` | 30 | media-bin rows |
-| `trackH` | 42 | timeline lane height |
-| `topBarH` | 36 | panel headers, top strip |
+| `hCompact` | 24 | icon buttons, lane toggles, swatches |
+| `hSmall` | 28 | compact buttons, sliders |
+| `hStd` | 32 | standard buttons, inputs |
+| `hLarge` | 38 | primary action, dialog buttons |
+| `rowH` | 34 | media-bin control rows |
+| `trackH` | 48 | timeline lane height |
+| `topBarH` | 44 | panel headers, top strip |
 | `gutter` | 1 | the only gap between panels (a hairline seam) |
 
 ### Radii (clamped by the theme's own rounding)
@@ -123,8 +129,15 @@ not hand-write `rgba(...)` literals.
   90 ms colour transitions on hover/press.
 - **Labels over content sit on a scrim** — clip names use `Design.alpha(surfaceSunken, 0.72)`,
   never a raw black.
+- **The viewer behaves like a monitor.** A muted `surfaceSunken` matte surrounds the picture, with
+  corner crop marks and a concise `VIEWER / resolution / LOCAL` header. The canvas itself is black
+  during playback and a raised themed surface only for the empty intake state.
+- **Source rows read as a cutting list.** Kind is marked by a three-pixel lane stripe, media metadata
+  uses mono numerals, and hover swaps metadata for explicit `V1`, `V2`, and remove actions without
+  moving the name.
 - **Section labels are `tCaption`/`textSecondary` above a `Divider`.** Uppercase tracking and bold
-  headings are not used.
+  headings are not used except for short technical ruler/status labels where mono tracking aids
+  scanning.
 - **Selected state = 2 px `textPrimary` outline; hover = surface tint.** Selection is never
   colour-only.
 - **Empty states say what to do**: the viewer offers "Import Media" instead of "no clip", on the
@@ -134,6 +147,8 @@ not hand-write `rgba(...)` literals.
   playhead. `pkgbuild/cutcap.svg` carries the same two bars for the desktop icon.
 - **Flat buttons carry no border.** Hover tints the surface, focus adds the 2 px ring; a border is
   for buttons that own a surface, not for the command strip.
+- **Custom controls are controls, not mouse areas.** Lane toggles, color swatches, transition chips
+  and reset actions expose a role and name, take tab focus, and activate with Space/Return.
 
 ---
 
@@ -189,6 +204,11 @@ selected).
   <https://www.descript.com/blog/article/best-video-editing-software> ,
   <https://www.descript.com/blog/article/best-video-editing-software-for-windows>
 - DaVinci Resolve interface & panel focus — <https://2pop.calarts.edu/technicalsupport/davinci-resolve-interface>
+- Desktop toolbar grouping, primary-action placement and narrow-window behaviour —
+  <https://developer.apple.com/design/human-interface-guidelines/toolbars>
+- Resizable workspace split views and pane sizing —
+  <https://developer.apple.com/design/human-interface-guidelines/split-views>
+- WCAG 2.2 pointer target-size minimum — <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum>
 - Dense product-UI type and spacing scales (4 px grid, 13–14 px body) —
   <http://designify.design/blog/ui-type-scale>
 - Linear token conventions (surface steps, tabular numerals, hairline borders) —

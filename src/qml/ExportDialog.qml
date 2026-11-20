@@ -170,7 +170,7 @@ Dialog {
                     objectName: "exportEstimateText"
                     text: root.estimate.resolutionLabel + " · " + root.estimate.durationLabel + " · " + root.estimate.estimatedSizeLabel
                     color: Design.textPrimary
-                    font.family: "monospace"
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tCaption
                     horizontalAlignment: Text.AlignRight
                     Layout.fillWidth: true

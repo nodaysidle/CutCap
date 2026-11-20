@@ -9,7 +9,7 @@ Rectangle {
     color: Design.surfacePanel
     clip: true
 
-    readonly property int headerWidth: 148
+    readonly property int headerWidth: 168
     readonly property int trackHeight: Design.trackH
     readonly property real pxPerSec: Backend.zoomPxPerSec
     readonly property real timelineWidth: Math.max(timelineFlick.width, (Backend.totalDuration + 10) * pxPerSec)
@@ -58,24 +58,44 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 8
-        spacing: 6
+        anchors.margins: Design.s4
+        spacing: Design.s3
 
         // Timeline Toolbar
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Design.s2
+
+            Text {
+                text: "TIMELINE"
+                color: Design.textPrimary
+                font.family: Design.fontMono
+                font.pixelSize: Design.tMicro
+                font.weight: Design.wSemibold
+                font.letterSpacing: 0.8
+            }
+            Text {
+                text: Backend.formatTimecode(Backend.totalDuration)
+                color: Design.textSecondary
+                font.family: Design.fontMono
+                font.pixelSize: Design.tMicro
+            }
+
+            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Design.borderHairline }
 
             ActionButton {
                 text: "Split (S)"
+                horizontalPadding: Design.s2
                 onClicked: Backend.splitAtPlayhead()
             }
             ActionButton {
                 text: "Delete"
+                horizontalPadding: Design.s2
                 onClicked: Backend.deleteSelected(false)
             }
             ActionButton {
                 text: "Ripple Del"
+                horizontalPadding: Design.s2
                 onClicked: Backend.deleteSelected(true)
             }
 
@@ -83,10 +103,12 @@ Rectangle {
 
             ActionButton {
                 text: "+ Text"
+                horizontalPadding: Design.s2
                 onClicked: Backend.addTextAtPlayhead("Title", false)
             }
             ActionButton {
                 text: "+ Caption"
+                horizontalPadding: Design.s2
                 onClicked: Backend.addTextAtPlayhead("Caption", true)
             }
 
@@ -102,20 +124,21 @@ Rectangle {
             Text {
                 text: "Zoom"
                 color: Design.textSecondary
+                font.family: Design.fontMono
                 font.pixelSize: Design.tCaption
             }
             ActionButton {
                 text: "−"
                 flat: true
                 fontPixelSize: Design.tTitle
-                implicitWidth: 30
+                implicitWidth: Design.hCompact
                 onClicked: Backend.zoomPxPerSec = Backend.zoomPxPerSec * 0.8
             }
             ActionButton {
                 text: "+"
                 flat: true
                 fontPixelSize: Design.tTitle
-                implicitWidth: 30
+                implicitWidth: Design.hCompact
                 onClicked: Backend.zoomPxPerSec = Backend.zoomPxPerSec * 1.25
             }
         }
@@ -149,6 +172,7 @@ Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "TIME"
                         color: Design.textSecondary
+                        font.family: Design.fontMono
                         font.pixelSize: Design.tMicro
                         font.letterSpacing: 0.6
                     }
@@ -192,8 +216,8 @@ Rectangle {
                                 text: delegateRoot5.modelData.label
                                 elide: Text.ElideRight
                                 color: laneState.locked === true ? Design.textSecondary : Design.textPrimary
-                                font.pixelSize: Design.tCaption
-                                font.weight: Design.wMedium
+                                font.pixelSize: Design.tBody
+                                font.weight: Design.wSemibold
                             }
                             Text {
                                 width: parent.width
@@ -202,12 +226,13 @@ Rectangle {
                                                                : (laneState.locked ? "locked" : (laneState.muted ? "muted" : "video")))
                                 elide: Text.ElideRight
                                 color: Design.textSecondary
+                                font.family: Design.fontMono
                                 font.pixelSize: Design.tMicro
                             }
                         }
                         Row {
                             id: laneToggles
-                            width: 3 * (Design.hCompact - 4) + 2 * Design.s1
+                            width: 3 * Design.hCompact + 2 * Design.s1
                             anchors.right: parent.right
                             anchors.rightMargin: Design.s2
                             anchors.verticalCenter: parent.verticalCenter
@@ -258,7 +283,7 @@ Rectangle {
                     id: timelineHScroll
                     objectName: "timelineHScroll"
                     policy: ScrollBar.AsNeeded
-                    height: 8
+                    height: 10
                     contentItem: Rectangle {
                         implicitHeight: 6
                         radius: height / 2
@@ -271,7 +296,7 @@ Rectangle {
                     id: timelineVScroll
                     objectName: "timelineVScroll"
                     policy: ScrollBar.AsNeeded
-                    width: 8
+                    width: 10
                     contentItem: Rectangle {
                         implicitWidth: 6
                         radius: width / 2
@@ -349,6 +374,7 @@ Rectangle {
                                     y: 4
                                     text: Math.floor(index * 2 / 60) + ":" + String(index * 2 % 60).padStart(2, "0")
                                     color: Design.textSecondary
+                                    font.family: Design.fontMono
                                     font.pixelSize: Design.tMicro
                                 }
                             }
@@ -511,7 +537,7 @@ Rectangle {
                     id: playhead
                     x: Backend.playheadSec * root.pxPerSec - width / 2
                     y: 0
-                    width: 13
+                    width: 20
                     height: parent.height
                     z: 50
 
@@ -524,8 +550,8 @@ Rectangle {
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
                         y: 0
-                        width: 13
-                        height: 16
+                        width: 18
+                        height: 20
                         radius: Design.rXs
                         color: Design.accent
                         border.color: Design.alpha(Design.surfaceSunken, 0.5)
@@ -534,8 +560,8 @@ Rectangle {
                     MouseArea {
                         anchors.horizontalCenter: parent.horizontalCenter
                         y: 0
-                        width: 15
-                        height: 16
+                        width: 18
+                        height: 20
                         cursorShape: Qt.SizeHorCursor
                         drag.target: playhead
                         drag.axis: Drag.XAxis
@@ -558,16 +584,22 @@ Rectangle {
         property bool active: false
         property color activeColor: Design.accent
         property string toolTipText: ""
-        implicitWidth: Design.hCompact - 4
-        implicitHeight: Design.hCompact - 6
+        implicitWidth: Design.hCompact
+        implicitHeight: Design.hCompact
         radius: Design.rXs
         color: active ? activeColor : "transparent"
-        border.width: active ? 0 : 1
-        border.color: Design.borderHairline
+        border.width: activeFocus ? 2 : (active ? 0 : 1)
+        border.color: activeFocus ? Design.focusRing : Design.borderHairline
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: toggle.toolTipText
+        Accessible.checked: toggle.active
+        Accessible.onPressAction: toggle.toggled()
         Text {
             anchors.centerIn: parent
             text: toggle.label
             color: toggle.active ? Design.onAccent : Design.textSecondary
+            font.family: Design.fontMono
             font.pixelSize: Design.tMicro
             font.weight: Design.wSemibold
         }
@@ -576,8 +608,13 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: toggle.toggled()
+            onClicked: {
+                toggle.forceActiveFocus()
+                toggle.toggled()
+            }
         }
+        Keys.onSpacePressed: toggle.toggled()
+        Keys.onReturnPressed: toggle.toggled()
         ToolTip.visible: hovered && toggle.toolTipText.length > 0
         ToolTip.text: toggle.toolTipText
         ToolTip.delay: 400
@@ -619,12 +656,17 @@ Rectangle {
                 Rectangle {
                     objectName: "transitionChip_" + delegateRoot6.modelData.secondId
                     anchors.centerIn: parent
-                    width: 18
-                    height: 18
+                    width: Design.hCompact
+                    height: Design.hCompact
                     radius: Design.rXs
                     color: chipMouse.containsMouse ? Design.surfaceOverlay : Design.surfaceRaised
-                    border.width: 1
-                    border.color: delegateRoot6.modelData.kind !== "none" ? Design.accent : Design.borderStrong
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? Design.focusRing
+                                  : (delegateRoot6.modelData.kind !== "none" ? Design.accent : Design.borderStrong)
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Edit transition before " + delegateRoot6.modelData.secondId
+                    Accessible.onPressAction: chipMenu.open()
 
                     Text {
                         anchors.centerIn: parent
@@ -638,8 +680,13 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: chipMenu.open()
+                        onClicked: {
+                            parent.forceActiveFocus()
+                            chipMenu.open()
+                        }
                     }
+                    Keys.onSpacePressed: chipMenu.open()
+                    Keys.onReturnPressed: chipMenu.open()
                     Menu {
                         id: chipMenu
                         objectName: "transitionMenu_" + delegateRoot6.modelData.secondId

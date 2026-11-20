@@ -19,4 +19,5 @@ package() {
     install -Dm755 "$srcdir/build/cutcap" "$pkgdir/usr/bin/cutcap"
     install -Dm644 "$startdir/cutcap.desktop" "$pkgdir/usr/share/applications/cutcap.desktop"
     install -Dm644 "$startdir/cutcap.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/cutcap.svg"
+    install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

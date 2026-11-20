@@ -34,17 +34,18 @@ Rectangle {
                 Text {
                     text: "Media"
                     color: Design.textPrimary
-                    font.pixelSize: Design.tBody
+                    font.pixelSize: Design.tBodyLg
                     font.weight: Design.wSemibold
                 }
                 Text {
                     text: assetsListView.count + (assetsListView.count === 1 ? " item" : " items")
                     color: Design.textSecondary
+                    font.family: Design.fontMono
                     font.pixelSize: Design.tMicro
                     Layout.fillWidth: true
                 }
                 ActionButton {
-                    text: "Import"
+                    text: "+ Import"
                     flat: true
                     toolTipText: "Import media, projects or subtitles (Ctrl+O)"
                     onClicked: root.importRequested()
@@ -61,13 +62,43 @@ Rectangle {
         clip: true
         model: Backend.assetsList
 
-        Label {
+        Column {
             anchors.centerIn: parent
+            anchors.margins: Design.s6
             visible: parent.count === 0
-            text: "Drop video, audio, or\nimage files here"
-            horizontalAlignment: Text.AlignHCenter
-            color: Design.textSecondary
-            font.pixelSize: Design.tBodyLg
+            spacing: Design.s3
+            width: Math.min(parent.width - Design.s6 * 2, 240)
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 36
+                height: 28
+                color: "transparent"
+                Rectangle { x: 0; y: 4; width: 22; height: 8; color: Design.textPrimary }
+                Rectangle { x: 14; y: 16; width: 22; height: 8; color: Design.textPrimary }
+            }
+            Text {
+                width: parent.width
+                text: "Build your source bin"
+                color: Design.textPrimary
+                font.pixelSize: Design.tTitle
+                font.weight: Design.wSemibold
+                horizontalAlignment: Text.AlignHCenter
+            }
+            Text {
+                width: parent.width
+                text: "Drop video, audio, images, or a .cutcap project here."
+                color: Design.textSecondary
+                font.pixelSize: Design.tBody
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+            ActionButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Import Media"
+                flat: true
+                onClicked: root.importRequested()
+            }
         }
 
         delegate: Item {
@@ -75,13 +106,13 @@ Rectangle {
             required property int index
             required property var modelData
             width: assetsListView.width
-            height: 64
+            height: 72
 
             Rectangle {
                 id: assetCard
                 objectName: "assetCard"
                 width: parent.width
-                height: 64
+                height: 72
                 radius: 0
                 color: assetDragArea.containsMouse || assetDragArea.drag.active
                        ? Design.mix(Design.surfacePanel, Design.textPrimary, 0.05) : "transparent"
@@ -99,6 +130,14 @@ Rectangle {
                 property string assetName: delegateRoot1.modelData.name
                 property real assetDuration: delegateRoot1.modelData.durationSec
                 property bool hovered: assetDragArea.containsMouse || assetDragArea.drag.active
+
+                Rectangle {
+                    width: 3
+                    height: parent.height
+                    color: delegateRoot1.modelData.kind === "audio" ? Design.laneAudio
+                           : delegateRoot1.modelData.kind === "image" ? Design.laneText : Design.laneV1
+                    opacity: assetCard.hovered ? 1.0 : 0.55
+                }
 
                 Drag.active: assetDragArea.drag.active
                 Drag.keys: ["cutcap/asset"]
@@ -122,8 +161,8 @@ Rectangle {
                         spacing: 8
 
                         Rectangle {
-                            Layout.preferredWidth: 64
-                            Layout.preferredHeight: 36
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 40
                             radius: Design.rXs
                             color: Design.surfaceSunken
                             clip: true
@@ -168,7 +207,7 @@ Rectangle {
                                 objectName: "assetName"
                                 text: delegateRoot1.modelData.name
                                 color: Design.textPrimary
-                                font.pixelSize: Design.tBody
+                                font.pixelSize: Design.tBodyLg
                                 font.weight: Design.wSemibold
                                 elide: Text.ElideMiddle
                                 Layout.fillWidth: true
@@ -200,6 +239,7 @@ Rectangle {
                                     // Drop dimensions before eliding kind and duration at narrow widths.
                                     text: fullMetaMetrics.advanceWidth <= width ? metaSlot.fullMeta : metaSlot.baseMeta
                                     color: Design.textSecondary
+                                    font.family: Design.fontMono
                                     font.pixelSize: Design.tCaption
                                     elide: Text.ElideRight
                                     visible: !assetCard.hovered
@@ -212,14 +252,16 @@ Rectangle {
                                     visible: assetCard.hovered
 
                                     ActionButton {
-                                        text: delegateRoot1.modelData.kind === "audio" ? "→ A1" : "→ V1"
+                                        text: delegateRoot1.modelData.kind === "audio" ? "A1" : "V1"
                                         flat: true
+                                        horizontalPadding: Design.s2
                                         toolTipText: "Append to " + (delegateRoot1.modelData.kind === "audio" ? "A1 audio" : "V1 main video")
                                         onClicked: Backend.addAssetToTimeline(delegateRoot1.modelData.id, delegateRoot1.modelData.kind === "audio" ? 2 : 0, -1)
                                     }
                                     ActionButton {
-                                        text: "→ V2"
+                                        text: "V2"
                                         flat: true
+                                        horizontalPadding: Design.s2
                                         visible: delegateRoot1.modelData.kind !== "audio"
                                         toolTipText: "Place on V2 overlay at the playhead"
                                         onClicked: Backend.addAssetToTimeline(delegateRoot1.modelData.id, 1, Backend.playheadSec)
@@ -228,6 +270,7 @@ Rectangle {
                                         text: "×"
                                         flat: true
                                         implicitWidth: Design.hCompact
+                                        horizontalPadding: Design.s2
                                         textColor: Design.danger
                                         toolTipText: "Remove from media bin"
                                         onClicked: Backend.removeAsset(delegateRoot1.modelData.id)
