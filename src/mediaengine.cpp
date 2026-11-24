@@ -891,6 +891,10 @@ QList<TextOverlay> MediaEngine::captionsForClip(const QList<TextOverlay> &cues, 
     return out;
 }
 
+QStringList MediaEngine::buildEspeakTtsArgs(const QString &outputWavPath, const QString &text) {
+    return {"-w", outputWavPath, "--", text};
+}
+
 bool MediaEngine::runLocalTts(const QString &text, const QString &outputWavPath, QString *error) {
     const auto caps = detectCapabilities();
     if (caps.ttsCmd.isEmpty()) {
@@ -903,7 +907,7 @@ bool MediaEngine::runLocalTts(const QString &text, const QString &outputWavPath,
 
     QProcess proc;
     if (caps.ttsCmd == "espeak-ng" || caps.ttsCmd == "espeak") {
-        proc.start(caps.ttsCmd, {"-w", outputWavPath, text});
+        proc.start(caps.ttsCmd, buildEspeakTtsArgs(outputWavPath, text));
         if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
             if (error)
                 *error = QString::fromUtf8(proc.readAllStandardError());

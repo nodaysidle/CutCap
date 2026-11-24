@@ -1,5 +1,7 @@
 #include "backend.h"
 
+#include "cliplistmodel.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -34,6 +36,8 @@ static QString exportErrorReason(const QString &stderrTail) {
 }
 
 Backend::Backend(QObject *parent) : QObject(parent) {
+    m_clipModel = new ClipListModel(this, this);
+
     m_playbackTimer.setInterval(16);
     m_playbackTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_playbackTimer, &QTimer::timeout, this, [this] {

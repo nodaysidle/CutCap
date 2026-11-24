@@ -8,7 +8,7 @@ import QtQuick.tooling 1.2
 Module {
     Component {
         file: "backend.h"
-        lineNumber: 15
+        lineNumber: 18
         name: "Backend"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -22,7 +22,7 @@ Module {
             read: "projectTitle"
             notify: "projectChanged"
             index: 0
-            lineNumber: 19
+            lineNumber: 22
             isReadonly: true
         }
         Property {
@@ -31,7 +31,7 @@ Module {
             read: "projectPath"
             notify: "projectChanged"
             index: 1
-            lineNumber: 20
+            lineNumber: 23
             isReadonly: true
         }
         Property {
@@ -40,7 +40,7 @@ Module {
             read: "dirty"
             notify: "projectChanged"
             index: 2
-            lineNumber: 21
+            lineNumber: 24
             isReadonly: true
         }
         Property {
@@ -49,7 +49,7 @@ Module {
             read: "totalDuration"
             notify: "timelineChanged"
             index: 3
-            lineNumber: 22
+            lineNumber: 25
             isReadonly: true
         }
         Property {
@@ -59,7 +59,7 @@ Module {
             write: "setPlayheadSec"
             notify: "playheadChanged"
             index: 4
-            lineNumber: 23
+            lineNumber: 26
         }
         Property {
             name: "playing"
@@ -68,7 +68,7 @@ Module {
             write: "setPlaying"
             notify: "playbackChanged"
             index: 5
-            lineNumber: 24
+            lineNumber: 27
         }
         Property {
             name: "zoomPxPerSec"
@@ -77,7 +77,7 @@ Module {
             write: "setZoomPxPerSec"
             notify: "viewChanged"
             index: 6
-            lineNumber: 25
+            lineNumber: 28
         }
         Property {
             name: "selectedClipId"
@@ -85,7 +85,7 @@ Module {
             read: "selectedClipId"
             notify: "selectionChanged"
             index: 7
-            lineNumber: 27
+            lineNumber: 30
             isReadonly: true
         }
         Property {
@@ -94,7 +94,7 @@ Module {
             read: "selectedClipIds"
             notify: "selectionChanged"
             index: 8
-            lineNumber: 28
+            lineNumber: 31
             isReadonly: true
         }
         Property {
@@ -103,7 +103,7 @@ Module {
             read: "selectedClipCount"
             notify: "selectionChanged"
             index: 9
-            lineNumber: 29
+            lineNumber: 32
             isReadonly: true
         }
         Property {
@@ -112,7 +112,7 @@ Module {
             read: "selectedTextId"
             notify: "selectionChanged"
             index: 10
-            lineNumber: 30
+            lineNumber: 33
             isReadonly: true
         }
         Property {
@@ -121,7 +121,7 @@ Module {
             read: "selectedClip"
             notify: "timelineChanged"
             index: 11
-            lineNumber: 31
+            lineNumber: 34
             isReadonly: true
         }
         Property {
@@ -130,7 +130,7 @@ Module {
             read: "selectedText"
             notify: "timelineChanged"
             index: 12
-            lineNumber: 32
+            lineNumber: 35
             isReadonly: true
         }
         Property {
@@ -139,7 +139,7 @@ Module {
             read: "assetsList"
             notify: "assetsChanged"
             index: 13
-            lineNumber: 34
+            lineNumber: 37
             isReadonly: true
         }
         Property {
@@ -148,16 +148,26 @@ Module {
             read: "clipsList"
             notify: "timelineChanged"
             index: 14
-            lineNumber: 35
+            lineNumber: 38
             isReadonly: true
+        }
+        Property {
+            name: "clipModel"
+            type: "QAbstractListModel"
+            isPointer: true
+            read: "clipModel"
+            index: 15
+            lineNumber: 41
+            isReadonly: true
+            isPropertyConstant: true
         }
         Property {
             name: "clipCount"
             type: "int"
             read: "clipCount"
             notify: "timelineChanged"
-            index: 15
-            lineNumber: 36
+            index: 16
+            lineNumber: 42
             isReadonly: true
         }
         Property {
@@ -165,8 +175,8 @@ Module {
             type: "QVariantList"
             read: "textsList"
             notify: "timelineChanged"
-            index: 16
-            lineNumber: 37
+            index: 17
+            lineNumber: 43
             isReadonly: true
         }
         Property {
@@ -174,8 +184,8 @@ Module {
             type: "int"
             read: "textCount"
             notify: "timelineChanged"
-            index: 17
-            lineNumber: 38
+            index: 18
+            lineNumber: 44
             isReadonly: true
         }
         Property {
@@ -183,8 +193,8 @@ Module {
             type: "QVariantList"
             read: "transitionPoints"
             notify: "timelineChanged"
-            index: 18
-            lineNumber: 39
+            index: 19
+            lineNumber: 45
             isReadonly: true
         }
         Property {
@@ -192,8 +202,8 @@ Module {
             type: "QVariantList"
             read: "activeTexts"
             notify: "activeTextsChanged"
-            index: 19
-            lineNumber: 40
+            index: 20
+            lineNumber: 46
             isReadonly: true
         }
         Property {
@@ -201,8 +211,8 @@ Module {
             type: "QVariantList"
             read: "lanesList"
             notify: "timelineChanged"
-            index: 20
-            lineNumber: 41
+            index: 21
+            lineNumber: 47
             isReadonly: true
         }
         Property {
@@ -210,8 +220,8 @@ Module {
             type: "double"
             read: "snapGuideSec"
             notify: "snapGuideChanged"
-            index: 21
-            lineNumber: 42
+            index: 22
+            lineNumber: 48
             isReadonly: true
         }
         Property {
@@ -219,8 +229,8 @@ Module {
             type: "QVariantMap"
             read: "capabilities"
             notify: "capabilitiesChanged"
-            index: 22
-            lineNumber: 43
+            index: 23
+            lineNumber: 49
             isReadonly: true
         }
         Property {
@@ -228,8 +238,8 @@ Module {
             type: "int"
             read: "importing"
             notify: "importStateChanged"
-            index: 23
-            lineNumber: 44
+            index: 24
+            lineNumber: 50
             isReadonly: true
         }
         Property {
@@ -237,8 +247,8 @@ Module {
             type: "bool"
             read: "busy"
             notify: "busyStateChanged"
-            index: 24
-            lineNumber: 45
+            index: 25
+            lineNumber: 51
             isReadonly: true
         }
         Property {
@@ -246,8 +256,8 @@ Module {
             type: "bool"
             read: "canUndo"
             notify: "timelineChanged"
-            index: 25
-            lineNumber: 47
+            index: 26
+            lineNumber: 53
             isReadonly: true
         }
         Property {
@@ -255,8 +265,8 @@ Module {
             type: "bool"
             read: "canRedo"
             notify: "timelineChanged"
-            index: 26
-            lineNumber: 48
+            index: 27
+            lineNumber: 54
             isReadonly: true
         }
         Property {
@@ -264,8 +274,8 @@ Module {
             type: "QVariantMap"
             read: "baseLane"
             notify: "previewStateChanged"
-            index: 27
-            lineNumber: 50
+            index: 28
+            lineNumber: 56
             isReadonly: true
         }
         Property {
@@ -273,8 +283,8 @@ Module {
             type: "QVariantMap"
             read: "overlayLane"
             notify: "previewStateChanged"
-            index: 28
-            lineNumber: 51
+            index: 29
+            lineNumber: 57
             isReadonly: true
         }
         Property {
@@ -282,8 +292,8 @@ Module {
             type: "QVariantMap"
             read: "audioLane"
             notify: "previewStateChanged"
-            index: 29
-            lineNumber: 52
+            index: 30
+            lineNumber: 58
             isReadonly: true
         }
         Property {
@@ -291,8 +301,8 @@ Module {
             type: "QString"
             read: "clockLane"
             notify: "previewStateChanged"
-            index: 30
-            lineNumber: 53
+            index: 31
+            lineNumber: 59
             isReadonly: true
         }
         Property {
@@ -300,8 +310,8 @@ Module {
             type: "QVariantMap"
             read: "selectedClipTransform"
             notify: "previewStateChanged"
-            index: 31
-            lineNumber: 54
+            index: 32
+            lineNumber: 60
             isReadonly: true
         }
         Property {
@@ -309,8 +319,8 @@ Module {
             type: "int"
             read: "projectWidth"
             notify: "projectChanged"
-            index: 32
-            lineNumber: 55
+            index: 33
+            lineNumber: 61
             isReadonly: true
         }
         Property {
@@ -318,8 +328,8 @@ Module {
             type: "int"
             read: "projectHeight"
             notify: "projectChanged"
-            index: 33
-            lineNumber: 56
+            index: 34
+            lineNumber: 62
             isReadonly: true
         }
         Property {
@@ -327,8 +337,8 @@ Module {
             type: "bool"
             read: "exporting"
             notify: "exportStateChanged"
-            index: 34
-            lineNumber: 58
+            index: 35
+            lineNumber: 64
             isReadonly: true
         }
         Property {
@@ -336,8 +346,8 @@ Module {
             type: "double"
             read: "exportProgress"
             notify: "exportStateChanged"
-            index: 35
-            lineNumber: 59
+            index: 36
+            lineNumber: 65
             isReadonly: true
         }
         Property {
@@ -345,8 +355,8 @@ Module {
             type: "bool"
             read: "recordingVoiceover"
             notify: "voiceoverStateChanged"
-            index: 36
-            lineNumber: 60
+            index: 37
+            lineNumber: 66
             isReadonly: true
         }
         Property {
@@ -354,85 +364,85 @@ Module {
             type: "QString"
             read: "statusMessage"
             notify: "statusChanged"
-            index: 37
-            lineNumber: 61
+            index: 38
+            lineNumber: 67
             isReadonly: true
         }
-        Signal { name: "projectChanged"; lineNumber: 184 }
-        Signal { name: "assetsChanged"; lineNumber: 185 }
-        Signal { name: "timelineChanged"; lineNumber: 186 }
-        Signal { name: "selectionChanged"; lineNumber: 187 }
-        Signal { name: "playheadChanged"; lineNumber: 188 }
-        Signal { name: "playbackChanged"; lineNumber: 189 }
-        Signal { name: "viewChanged"; lineNumber: 190 }
-        Signal { name: "previewChanged"; lineNumber: 191 }
-        Signal { name: "previewStateChanged"; lineNumber: 192 }
-        Signal { name: "seekRequested"; lineNumber: 193 }
-        Signal { name: "activeTextsChanged"; lineNumber: 194 }
-        Signal { name: "snapGuideChanged"; lineNumber: 195 }
-        Signal { name: "exportStateChanged"; lineNumber: 196 }
+        Signal { name: "projectChanged"; lineNumber: 191 }
+        Signal { name: "assetsChanged"; lineNumber: 192 }
+        Signal { name: "timelineChanged"; lineNumber: 193 }
+        Signal { name: "selectionChanged"; lineNumber: 194 }
+        Signal { name: "playheadChanged"; lineNumber: 195 }
+        Signal { name: "playbackChanged"; lineNumber: 196 }
+        Signal { name: "viewChanged"; lineNumber: 197 }
+        Signal { name: "previewChanged"; lineNumber: 198 }
+        Signal { name: "previewStateChanged"; lineNumber: 199 }
+        Signal { name: "seekRequested"; lineNumber: 200 }
+        Signal { name: "activeTextsChanged"; lineNumber: 201 }
+        Signal { name: "snapGuideChanged"; lineNumber: 202 }
+        Signal { name: "exportStateChanged"; lineNumber: 203 }
         Signal {
             name: "exportFinished"
-            lineNumber: 197
+            lineNumber: 204
             Parameter { name: "ok"; type: "bool" }
             Parameter { name: "message"; type: "QString" }
         }
-        Signal { name: "voiceoverStateChanged"; lineNumber: 198 }
-        Signal { name: "statusChanged"; lineNumber: 199 }
+        Signal { name: "voiceoverStateChanged"; lineNumber: 205 }
+        Signal { name: "statusChanged"; lineNumber: 206 }
         Signal {
             name: "errorOccurred"
-            lineNumber: 200
+            lineNumber: 207
             Parameter { name: "message"; type: "QString" }
         }
-        Signal { name: "capabilitiesChanged"; lineNumber: 201 }
-        Signal { name: "importStateChanged"; lineNumber: 202 }
-        Signal { name: "busyStateChanged"; lineNumber: 203 }
-        Method { name: "newProject"; lineNumber: 119 }
+        Signal { name: "capabilitiesChanged"; lineNumber: 208 }
+        Signal { name: "importStateChanged"; lineNumber: 209 }
+        Signal { name: "busyStateChanged"; lineNumber: 210 }
+        Method { name: "newProject"; lineNumber: 126 }
         Method {
             name: "openProject"
             type: "bool"
-            lineNumber: 120
+            lineNumber: 127
             Parameter { name: "pathOrUrl"; type: "QString" }
         }
         Method {
             name: "saveProject"
             type: "bool"
-            lineNumber: 121
+            lineNumber: 128
             Parameter { name: "pathOrUrl"; type: "QString" }
         }
-        Method { name: "saveProject"; type: "bool"; isCloned: true; lineNumber: 121 }
-        Method { name: "refreshCapabilities"; lineNumber: 122 }
+        Method { name: "saveProject"; type: "bool"; isCloned: true; lineNumber: 128 }
+        Method { name: "refreshCapabilities"; lineNumber: 129 }
         Method {
             name: "setProjectTitle"
-            lineNumber: 123
+            lineNumber: 130
             Parameter { name: "title"; type: "QString" }
         }
         Method {
             name: "setProjectResolution"
-            lineNumber: 124
+            lineNumber: 131
             Parameter { name: "width"; type: "int" }
             Parameter { name: "height"; type: "int" }
         }
         Method {
             name: "importMedia"
-            lineNumber: 126
+            lineNumber: 133
             Parameter { name: "pathsOrUrls"; type: "QVariantList" }
         }
         Method {
             name: "importSingleMedia"
-            lineNumber: 127
+            lineNumber: 134
             Parameter { name: "pathOrUrl"; type: "QString" }
         }
         Method {
             name: "importMediaAt"
-            lineNumber: 128
+            lineNumber: 135
             Parameter { name: "pathsOrUrls"; type: "QVariantList" }
             Parameter { name: "track"; type: "int" }
             Parameter { name: "atSec"; type: "double" }
         }
         Method {
             name: "setLaneState"
-            lineNumber: 129
+            lineNumber: 136
             Parameter { name: "track"; type: "int" }
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "value"; type: "bool" }
@@ -440,27 +450,27 @@ Module {
         Method {
             name: "previewSnap"
             type: "double"
-            lineNumber: 131
+            lineNumber: 138
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "sec"; type: "double" }
             Parameter { name: "track"; type: "int" }
         }
-        Method { name: "clearSnapGuide"; lineNumber: 132 }
+        Method { name: "clearSnapGuide"; lineNumber: 139 }
         Method {
             name: "applyLookPreset"
-            lineNumber: 133
+            lineNumber: 140
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "preset"; type: "QString" }
         }
         Method {
             name: "removeAsset"
-            lineNumber: 134
+            lineNumber: 141
             Parameter { name: "assetId"; type: "QString" }
         }
         Method {
             name: "addAssetToTimeline"
             type: "QString"
-            lineNumber: 136
+            lineNumber: 143
             Parameter { name: "assetId"; type: "QString" }
             Parameter { name: "track"; type: "int" }
             Parameter { name: "atSec"; type: "double" }
@@ -469,7 +479,7 @@ Module {
             name: "addAssetToTimeline"
             type: "QString"
             isCloned: true
-            lineNumber: 136
+            lineNumber: 143
             Parameter { name: "assetId"; type: "QString" }
             Parameter { name: "track"; type: "int" }
         }
@@ -477,48 +487,48 @@ Module {
             name: "addAssetToTimeline"
             type: "QString"
             isCloned: true
-            lineNumber: 136
+            lineNumber: 143
             Parameter { name: "assetId"; type: "QString" }
         }
         Method {
             name: "selectClip"
-            lineNumber: 138
+            lineNumber: 145
             Parameter { name: "clipId"; type: "QString" }
         }
         Method {
             name: "selectClipAdditive"
-            lineNumber: 139
+            lineNumber: 146
             Parameter { name: "clipId"; type: "QString" }
         }
         Method {
             name: "selectClipRange"
-            lineNumber: 140
+            lineNumber: 147
             Parameter { name: "clipId"; type: "QString" }
         }
-        Method { name: "selectAllClips"; lineNumber: 141 }
-        Method { name: "clearClipSelection"; lineNumber: 142 }
+        Method { name: "selectAllClips"; lineNumber: 148 }
+        Method { name: "clearClipSelection"; lineNumber: 149 }
         Method {
             name: "selectText"
-            lineNumber: 143
+            lineNumber: 150
             Parameter { name: "textId"; type: "QString" }
         }
         Method {
             name: "moveSelectedClips"
             type: "bool"
-            lineNumber: 145
+            lineNumber: 152
             Parameter { name: "deltaSec"; type: "double" }
             Parameter { name: "deltaTrack"; type: "int" }
         }
         Method {
             name: "moveClip"
-            lineNumber: 147
+            lineNumber: 154
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "newStartSec"; type: "double" }
             Parameter { name: "newTrack"; type: "int" }
         }
         Method {
             name: "setTransitionBetween"
-            lineNumber: 149
+            lineNumber: 156
             Parameter { name: "firstId"; type: "QString" }
             Parameter { name: "secondId"; type: "QString" }
             Parameter { name: "kind"; type: "QString" }
@@ -527,41 +537,41 @@ Module {
         Method {
             name: "setTransitionBetween"
             isCloned: true
-            lineNumber: 149
+            lineNumber: 156
             Parameter { name: "firstId"; type: "QString" }
             Parameter { name: "secondId"; type: "QString" }
             Parameter { name: "kind"; type: "QString" }
         }
         Method {
             name: "trimClip"
-            lineNumber: 151
+            lineNumber: 158
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "newStartSec"; type: "double" }
             Parameter { name: "newDurationSec"; type: "double" }
             Parameter { name: "newSourceInSec"; type: "double" }
         }
-        Method { name: "splitAtPlayhead"; lineNumber: 152 }
+        Method { name: "splitAtPlayhead"; lineNumber: 159 }
         Method {
             name: "deleteSelected"
-            lineNumber: 153
+            lineNumber: 160
             Parameter { name: "ripple"; type: "bool" }
         }
-        Method { name: "deleteSelected"; isCloned: true; lineNumber: 153 }
+        Method { name: "deleteSelected"; isCloned: true; lineNumber: 160 }
         Method {
             name: "updateClipProperty"
-            lineNumber: 154
+            lineNumber: 161
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "value"; type: "QVariant" }
         }
         Method {
             name: "addKeyframeAtPlayhead"
-            lineNumber: 155
+            lineNumber: 162
             Parameter { name: "clipId"; type: "QString" }
         }
         Method {
             name: "updateTransformAtPlayhead"
-            lineNumber: 156
+            lineNumber: 163
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "x"; type: "double" }
             Parameter { name: "y"; type: "double" }
@@ -571,111 +581,111 @@ Module {
         }
         Method {
             name: "removeKeyframe"
-            lineNumber: 158
+            lineNumber: 165
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "timeSec"; type: "double" }
         }
         Method {
             name: "addTextAtPlayhead"
-            lineNumber: 160
+            lineNumber: 167
             Parameter { name: "text"; type: "QString" }
             Parameter { name: "isCaption"; type: "bool" }
         }
         Method {
             name: "addTextAtPlayhead"
             isCloned: true
-            lineNumber: 160
+            lineNumber: 167
             Parameter { name: "text"; type: "QString" }
         }
-        Method { name: "addTextAtPlayhead"; isCloned: true; lineNumber: 160 }
+        Method { name: "addTextAtPlayhead"; isCloned: true; lineNumber: 167 }
         Method {
             name: "updateTextProperty"
-            lineNumber: 161
+            lineNumber: 168
             Parameter { name: "textId"; type: "QString" }
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "value"; type: "QVariant" }
         }
         Method {
             name: "moveText"
-            lineNumber: 162
+            lineNumber: 169
             Parameter { name: "textId"; type: "QString" }
             Parameter { name: "newStartSec"; type: "double" }
         }
         Method {
             name: "importSrtFile"
-            lineNumber: 163
+            lineNumber: 170
             Parameter { name: "pathOrUrl"; type: "QString" }
         }
         Method {
             name: "exportSrtFile"
-            lineNumber: 164
+            lineNumber: 171
             Parameter { name: "pathOrUrl"; type: "QString" }
         }
         Method {
             name: "generateAutoCaptions"
-            lineNumber: 166
+            lineNumber: 173
             Parameter { name: "clipId"; type: "QString" }
             Parameter { name: "language"; type: "QString" }
         }
         Method {
             name: "generateAutoCaptions"
             isCloned: true
-            lineNumber: 166
+            lineNumber: 173
             Parameter { name: "clipId"; type: "QString" }
         }
-        Method { name: "toggleVoiceoverRecording"; lineNumber: 167 }
+        Method { name: "toggleVoiceoverRecording"; lineNumber: 174 }
         Method {
             name: "generateLocalTts"
-            lineNumber: 168
+            lineNumber: 175
             Parameter { name: "text"; type: "QString" }
         }
         Method {
             name: "applyAiBackgroundRemoval"
-            lineNumber: 169
+            lineNumber: 176
             Parameter { name: "clipId"; type: "QString" }
         }
         Method {
             name: "estimateExport"
             type: "QVariantMap"
             isMethodConstant: true
-            lineNumber: 171
+            lineNumber: 178
             Parameter { name: "preset"; type: "QString" }
             Parameter { name: "codec"; type: "QString" }
             Parameter { name: "resolutionPreset"; type: "QString" }
         }
         Method {
             name: "startExport"
-            lineNumber: 173
+            lineNumber: 180
             Parameter { name: "outputPathOrUrl"; type: "QString" }
             Parameter { name: "preset"; type: "QString" }
             Parameter { name: "codec"; type: "QString" }
             Parameter { name: "resolutionPreset"; type: "QString" }
         }
-        Method { name: "cancelExport"; lineNumber: 175 }
-        Method { name: "undo"; lineNumber: 177 }
-        Method { name: "redo"; lineNumber: 178 }
+        Method { name: "cancelExport"; lineNumber: 182 }
+        Method { name: "undo"; lineNumber: 184 }
+        Method { name: "redo"; lineNumber: 185 }
         Method {
             name: "syncPlayheadFromMedia"
-            lineNumber: 179
+            lineNumber: 186
             Parameter { name: "lane"; type: "QString" }
             Parameter { name: "mediaPosMs"; type: "qint64" }
         }
         Method {
             name: "laneReachedEnd"
-            lineNumber: 180
+            lineNumber: 187
             Parameter { name: "lane"; type: "QString" }
         }
         Method {
             name: "formatTimecode"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 181
+            lineNumber: 188
             Parameter { name: "sec"; type: "double" }
         }
     }
     Component {
         file: "clipframeitem.h"
-        lineNumber: 30
+        lineNumber: 31
         name: "ClipFrameItem"
         accessSemantics: "reference"
         prototype: "QQuickItem"
@@ -687,7 +697,7 @@ Module {
             isPointer: true
             read: "videoSink"
             index: 0
-            lineNumber: 33
+            lineNumber: 34
             isReadonly: true
             isPropertyConstant: true
         }
@@ -698,7 +708,7 @@ Module {
             write: "setImageSource"
             notify: "imageSourceChanged"
             index: 1
-            lineNumber: 34
+            lineNumber: 35
         }
         Property {
             name: "brightness"
@@ -706,7 +716,7 @@ Module {
             write: "setBrightness"
             notify: "lookChanged"
             index: 2
-            lineNumber: 35
+            lineNumber: 36
         }
         Property {
             name: "contrast"
@@ -714,7 +724,7 @@ Module {
             write: "setContrast"
             notify: "lookChanged"
             index: 3
-            lineNumber: 36
+            lineNumber: 37
         }
         Property {
             name: "saturation"
@@ -722,7 +732,7 @@ Module {
             write: "setSaturation"
             notify: "lookChanged"
             index: 4
-            lineNumber: 37
+            lineNumber: 38
         }
         Property {
             name: "blur"
@@ -730,7 +740,7 @@ Module {
             write: "setBlur"
             notify: "lookChanged"
             index: 5
-            lineNumber: 38
+            lineNumber: 39
         }
         Property {
             name: "referenceHeight"
@@ -738,7 +748,7 @@ Module {
             write: "setReferenceHeight"
             notify: "lookChanged"
             index: 6
-            lineNumber: 39
+            lineNumber: 40
         }
         Property {
             name: "vignette"
@@ -746,7 +756,7 @@ Module {
             write: "setVignette"
             notify: "lookChanged"
             index: 7
-            lineNumber: 40
+            lineNumber: 41
         }
         Property {
             name: "chromaKey"
@@ -754,7 +764,7 @@ Module {
             write: "setChromaKey"
             notify: "lookChanged"
             index: 8
-            lineNumber: 41
+            lineNumber: 42
         }
         Property {
             name: "keyColor"
@@ -762,7 +772,7 @@ Module {
             write: "setKeyColor"
             notify: "lookChanged"
             index: 9
-            lineNumber: 42
+            lineNumber: 43
         }
         Property {
             name: "similarity"
@@ -770,7 +780,7 @@ Module {
             write: "setSimilarity"
             notify: "lookChanged"
             index: 10
-            lineNumber: 43
+            lineNumber: 44
         }
         Property {
             name: "blend"
@@ -778,7 +788,7 @@ Module {
             write: "setBlend"
             notify: "lookChanged"
             index: 11
-            lineNumber: 44
+            lineNumber: 45
         }
         Property {
             name: "hasFrame"
@@ -786,12 +796,12 @@ Module {
             read: "hasFrame"
             notify: "hasFrameChanged"
             index: 12
-            lineNumber: 45
+            lineNumber: 46
             isReadonly: true
         }
-        Signal { name: "imageSourceChanged"; lineNumber: 74 }
-        Signal { name: "lookChanged"; lineNumber: 75 }
-        Signal { name: "hasFrameChanged"; lineNumber: 76 }
+        Signal { name: "imageSourceChanged"; lineNumber: 79 }
+        Signal { name: "lookChanged"; lineNumber: 80 }
+        Signal { name: "hasFrameChanged"; lineNumber: 81 }
     }
     Component {
         file: "design.h"
@@ -1518,6 +1528,7 @@ Module {
         }
         Signal { name: "changed"; lineNumber: 67 }
     }
+    Component { isTypeOpaque: true; name: "QAbstractListModel"; accessSemantics: "value" }
     Component { isTypeOpaque: true; name: "QColor"; accessSemantics: "value" }
     Component { isTypeOpaque: true; name: "QString"; accessSemantics: "value" }
     Component { isTypeOpaque: true; name: "QStringList"; accessSemantics: "value" }

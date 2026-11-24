@@ -65,6 +65,9 @@ public:
                                               double spanLengthSec = -1.0);
     // Maps cues that are relative to the clip's source-in point onto the timeline.
     static QList<TextOverlay> captionsForClip(const QList<TextOverlay> &cues, const TimelineClip &clip);
+    // espeak/espeak-ng args for speaking `text`; "--" ends option parsing so text that
+    // starts with "-" is spoken instead of being read as a flag.
+    static QStringList buildEspeakTtsArgs(const QString &outputWavPath, const QString &text);
     static bool runLocalTts(const QString &text, const QString &outputWavPath, QString *error = nullptr);
     static bool runAiBackgroundRemoval(const QString &inputPath, const QString &outputPath, QString *error = nullptr);
 };

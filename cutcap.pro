@@ -1,4 +1,4 @@
-QT += core gui qml quick quickcontrols2 multimedia concurrent dbus
+QT += core gui qml quick quickcontrols2 multimedia concurrent
 
 CONFIG += c++17 release
 CONFIG += qmltypes
@@ -15,6 +15,7 @@ HEADERS += \
     src/design.h \
     src/clipframeitem.h \
     src/cli.h \
+    src/cliplistmodel.h \
     src/mediaengine.h \
     src/project.h \
     src/theme.h
@@ -24,6 +25,7 @@ SOURCES += \
     src/design.cpp \
     src/clipframeitem.cpp \
     src/cli.cpp \
+    src/cliplistmodel.cpp \
     src/main.cpp \
     src/mediaengine.cpp \
     src/project.cpp \

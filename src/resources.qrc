@@ -9,5 +9,8 @@
         <file>qml/TimelinePanel.qml</file>
         <file>qml/ExportDialog.qml</file>
         <file>qml/ShortcutsDialog.qml</file>
+        <!-- Baked from shaders/look.vert and shaders/look.frag; see the comment in those files. -->
+        <file>shaders/look.vert.qsb</file>
+        <file>shaders/look.frag.qsb</file>
     </qresource>
 </RCC>

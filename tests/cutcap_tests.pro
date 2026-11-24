@@ -15,6 +15,7 @@ HEADERS += \
     ../src/design.h \
     ../src/cli.h \
     ../src/clipframeitem.h \
+    ../src/cliplistmodel.h \
     ../src/mediaengine.h \
     ../src/project.h \
     ../src/theme.h
@@ -24,6 +25,7 @@ SOURCES += \
     ../src/design.cpp \
     ../src/cli.cpp \
     ../src/clipframeitem.cpp \
+    ../src/cliplistmodel.cpp \
     ../src/mediaengine.cpp \
     ../src/project.cpp \
     ../src/theme.cpp \

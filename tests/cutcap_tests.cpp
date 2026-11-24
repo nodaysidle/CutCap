@@ -1,4 +1,7 @@
 #include <QtTest/QtTest>
+#include <QAbstractListModel>
+#include <QElapsedTimer>
+#include <QHash>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QFile>
@@ -119,6 +122,102 @@ static double contrastRatio(const QString &fg, const QString &bg) {
     const double b = lum(QColor(bg));
     return (std::max(a, b) + 0.05) / (std::min(a, b) + 0.05);
 }
+
+// Worst per-channel delta and mean delta (0-255) between two same-size images, comparing the raw
+// stored channels. The CPU reference is premultiplied and the grab window composites the item over
+// a black clear color, so its RGB channels hold the same premultiplied values. The alpha channel is
+// skipped on purpose: the offscreen grab window has no alpha buffer, so its alpha is always 255.
+static void imageDelta(const QImage &actual, const QImage &expected, int *maxDelta, double *meanDelta) {
+    Q_ASSERT(actual.size() == expected.size() && !actual.isNull());
+    *maxDelta = 0;
+    *meanDelta = 0.0;
+    for (int y = 0; y < actual.height(); ++y) {
+        for (int x = 0; x < actual.width(); ++x) {
+            const QRgb a = actual.pixel(x, y);
+            const QRgb e = expected.pixel(x, y);
+            const int dr = std::abs(qRed(a) - qRed(e));
+            const int dg = std::abs(qGreen(a) - qGreen(e));
+            const int db = std::abs(qBlue(a) - qBlue(e));
+            *maxDelta = std::max({*maxDelta, dr, dg, db});
+            *meanDelta += double(dr + dg + db);
+        }
+    }
+    *meanDelta /= double(actual.width()) * actual.height() * 3;
+}
+
+// Sample media shared by the UI tests: each clip is encoded once per process and reused, so
+// splitting the UI smoke coverage into several tests does not re-pay the ffmpeg cost (the media
+// cache under XDG_CACHE_HOME then also makes the repeat imports cheap).
+static QString uiSampleVideo(const QString &name, const QString &color, double seconds) {
+    static QTemporaryDir sharedDir;
+    static QHash<QString, QString> cache;
+    const auto it = cache.constFind(name);
+    if (it != cache.constEnd())
+        return it.value();
+    const QString path = makeSampleVideo(sharedDir.path(), name, color, seconds);
+    cache.insert(name, path);
+    return path;
+}
+
+static QString uiSampleTone() {
+    static QTemporaryDir sharedDir;
+    static QString path;
+    if (path.isEmpty()) {
+        const QString wav = sharedDir.path() + "/tone.wav";
+        QProcess tone;
+        tone.start("ffmpeg", {"-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=300:duration=2", wav});
+        if (tone.waitForFinished(10000) && tone.exitCode() == 0)
+            path = wav;
+    }
+    return path;
+}
+
+// One UI test's private app instance: a fresh QML engine wired to fresh Theme/Design/Backend
+// singletons, so every UI test fails on its own without state leaking in from another test.
+// Members are ordered so destruction runs engine-first, before the singletons it references.
+struct UiHarness {
+    std::unique_ptr<Theme> theme;
+    std::unique_ptr<Design> design;
+    std::unique_ptr<Backend> backend;
+    std::unique_ptr<QQmlApplicationEngine> engine;
+    QQuickWindow *window = nullptr;
+    QStringList qmlErrors;
+
+    // Registers the singletons but does not build the window yet, so a test can set up backend
+    // state (imports, clip moves) first, exactly like the app does before Main.qml reads it.
+    static UiHarness create(const QString &workDir) {
+        UiHarness h;
+        QQuickStyle::setStyle("Material");
+        h.theme = std::make_unique<Theme>(workDir);
+        h.design = std::make_unique<Design>(*h.theme);
+        h.backend = std::make_unique<Backend>();
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", h.theme.get());
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", h.design.get());
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", h.backend.get());
+        return h;
+    }
+
+    void loadEngine() {
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        engine = std::make_unique<QQmlApplicationEngine>();
+        engine->load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        if (!engine->rootObjects().isEmpty())
+            window = qobject_cast<QQuickWindow *>(engine->rootObjects().first());
+    }
+
+    static UiHarness loadMain(const QString &workDir) {
+        UiHarness h = create(workDir);
+        h.loadEngine();
+        return h;
+    }
+};
 
 // Writes an executable shell shim and returns its path.
 static QString makeTool(const QString &dir, const QString &name, const QByteArray &body) {
@@ -712,6 +811,193 @@ private slots:
         }
     }
 
+    // The preview applies the look in a GPU shader (src/shaders/look.frag) rather than the CPU
+    // pixel loop. The shader must reproduce ClipFrameItem::process() within float rounding:
+    // worst per-channel delta at most 2, per effect and all effects combined.
+    void gpuLookShaderMatchesCpuProcess() {
+        QTemporaryDir dir;
+        const int W = 240, H = 135; // small enough that the blur taps stay cheap on llvmpipe
+        QImage img(W, H, QImage::Format_ARGB32);
+        for (int y = 0; y < H; ++y) {
+            for (int x = 0; x < W; ++x) {
+                const int r = (x * 255) / (W - 1);
+                const int g = (y * 255) / (H - 1);
+                const int b = ((x + y) * 255) / (W + H - 2);
+                img.setPixel(x, y, qRgba(r, g, b, 255));
+            }
+        }
+        // A saturated green patch, so the chroma key has something to bite on.
+        for (int y = H / 3; y < 2 * H / 3; ++y)
+            for (int x = W / 3; x < 2 * W / 3; ++x)
+                img.setPixel(x, y, qRgba(0, 255, 0, 255));
+        const QString png = dir.path() + "/frame.png";
+        QVERIFY(img.save(png));
+
+        struct Case {
+            const char *name;
+            ClipLook look;
+        };
+        ClipLook eq;
+        eq.brightness = 0.1;
+        eq.contrast = 1.4;
+        eq.saturation = 0.3;
+        ClipLook blur;
+        blur.blurRadius = 8;
+        ClipLook vig;
+        vig.vignette = true;
+        ClipLook key;
+        key.chromaKey = true;
+        key.keyColor = QColor("#00ff00");
+        key.similarity = 0.18;
+        key.blend = 0.08;
+        ClipLook all;
+        all.brightness = 0.05;
+        all.contrast = 1.2;
+        all.saturation = 1.5;
+        all.blurRadius = 3;
+        all.vignette = true;
+        all.chromaKey = true;
+        all.keyColor = QColor("#00ff00");
+        all.similarity = 0.18;
+        all.blend = 0.08;
+        const QList<Case> cases = {
+            {"eq", eq}, {"blur r8", blur}, {"vignette", vig}, {"chromakey", key}, {"all combined", all},
+        };
+
+        QQuickWindow window;
+        window.setColor(Qt::black); // so the grab shows the premultiplied shader output as-is
+        window.resize(W, H);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QVERIFY2(window.rendererInterface()->graphicsApi() != QSGRendererInterface::Software,
+                 "the look shader needs an RHI scene graph; run with QT_QUICK_BACKEND=rhi");
+        auto *item = new ClipFrameItem(window.contentItem());
+        item->setSize(QSizeF(W, H)); // 1:1 with the image, so texel centres line up exactly
+        item->setImageSource(png);
+        QTRY_VERIFY_WITH_TIMEOUT(item->hasFrame(), 10000);
+
+        for (const Case &c : cases) {
+            item->setBrightness(c.look.brightness);
+            item->setContrast(c.look.contrast);
+            item->setSaturation(c.look.saturation);
+            item->setBlur(c.look.blurRadius);
+            item->setVignette(c.look.vignette);
+            item->setChromaKey(c.look.chromaKey);
+            item->setKeyColor(c.look.keyColor);
+            item->setSimilarity(c.look.similarity);
+            item->setBlend(c.look.blend);
+            // grabWindow() syncs and renders the scene, so the shader runs with the new look.
+            const QImage shot = window.grabWindow();
+            QCOMPARE(shot.size(), QSize(W, H));
+            const QImage expected = ClipFrameItem::process(img, c.look);
+            const QImage actual = shot;
+            int maxDelta = 0;
+            double meanDelta = 0.0;
+            imageDelta(actual, expected, &maxDelta, &meanDelta);
+            QVERIFY2(maxDelta <= 2,
+                     qPrintable(QString("%1: GPU shader vs CPU process() max channel delta %2, mean %3")
+                                    .arg(c.name).arg(maxDelta).arg(meanDelta, 0, 'f', 3)));
+            qDebug("gpuLookShaderMatchesCpuProcess %s: max delta %d, mean %.3f", c.name, maxDelta, meanDelta);
+        }
+
+        // Back on the identity look the item must drop the shader again and show the source
+        // exactly (the shader path would round-trip through YUV and lose a little precision).
+        item->setBrightness(0.0);
+        item->setContrast(1.0);
+        item->setSaturation(1.0);
+        item->setBlur(0.0);
+        item->setVignette(false);
+        item->setChromaKey(false);
+        const QImage idShot = window.grabWindow();
+        QCOMPARE(idShot.size(), QSize(W, H));
+        int maxDelta = 0;
+        double meanDelta = 0.0;
+        imageDelta(idShot, img.convertToFormat(QImage::Format_ARGB32_Premultiplied), &maxDelta, &meanDelta);
+        QVERIFY2(maxDelta <= 1,
+                 qPrintable(QString("identity after look: max channel delta %1, mean %2")
+                                .arg(maxDelta).arg(meanDelta, 0, 'f', 3)));
+    }
+
+    // The audit measured the CPU loop at ~44-54 ms per 1400x788 frame (saturation / blur r8 /
+    // chroma), capping the preview near 20 fps. With the look on the GPU the item's pipeline
+    // must not run that loop at all: the assertion is on the pixel counter and on the rendered
+    // frame; the timings are recorded for the report.
+    void gpuPreviewSkipsCpuPixelLoop() {
+        QTemporaryDir dir;
+        const int W = 1400, H = 788;
+        QImage img(W, H, QImage::Format_ARGB32);
+        for (int y = 0; y < H; ++y) {
+            for (int x = 0; x < W; ++x) {
+                const int r = (x * 7 + y * 3) % 256;
+                const int g = (x * 3 + y * 11) % 256;
+                const int b = ((x ^ y) * 5) % 256;
+                img.setPixel(x, y, qRgba(r, g, b, 255));
+            }
+        }
+        const QString png = dir.path() + "/big.png";
+        QVERIFY(img.save(png));
+
+        ClipLook sat;
+        sat.saturation = 0.4;
+        ClipLook blur;
+        blur.blurRadius = 8;
+        ClipLook key;
+        key.chromaKey = true;
+        key.keyColor = QColor("#00ff00");
+        const QList<QPair<const char *, ClipLook>> looks = {
+            {"saturation", sat}, {"blur r8", blur}, {"chromakey", key},
+        };
+
+        // What the CPU path costs for the same three looks (the "before" numbers).
+        const qint64 pixelsBefore = ClipFrameItem::cpuPixelsProcessed();
+        double cpuMs = 0.0;
+        for (const auto &entry : looks) {
+            QElapsedTimer t;
+            t.start();
+            const QImage out = ClipFrameItem::process(img, entry.second);
+            const double ms = t.elapsed();
+            QVERIFY(!out.isNull());
+            qDebug("CPU process() %s on %dx%d: %.1f ms", entry.first, W, H, ms);
+            if (qstrcmp(entry.first, "saturation") == 0)
+                cpuMs = ms;
+        }
+        QCOMPARE(ClipFrameItem::cpuPixelsProcessed() - pixelsBefore, qint64(3) * W * H);
+
+        QQuickWindow window;
+        window.setColor(Qt::black); // so the grab shows the premultiplied shader output as-is
+        window.resize(W, H);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QVERIFY(window.rendererInterface()->graphicsApi() != QSGRendererInterface::Software);
+        auto *item = new ClipFrameItem(window.contentItem());
+        item->setSize(QSizeF(W, H));
+        item->setImageSource(png);
+        QTRY_VERIFY_WITH_TIMEOUT(item->hasFrame(), 20000);
+
+        // A non-identity look on an existing frame only moves shader uniforms.
+        item->setSaturation(0.4);
+        QElapsedTimer t;
+        t.start();
+        QTRY_VERIFY_WITH_TIMEOUT(item->hasFrame(), 20000);
+        const qint64 pipelineMs = t.elapsed();
+        qDebug("GPU-path pipeline for %dx%d with a look: %lld ms (CPU process() saturation: %.1f ms)",
+               W, H, pipelineMs, cpuMs);
+        // Not one pixel of this frame went through the CPU loop.
+        QCOMPARE(ClipFrameItem::cpuPixelsProcessed() - pixelsBefore, qint64(3) * W * H);
+
+        // And what the shader drew still matches the CPU reference.
+        const QImage shot = window.grabWindow();
+        QCOMPARE(shot.size(), QSize(W, H));
+        const QImage expected = ClipFrameItem::process(img, sat);
+        const QImage actual = shot;
+        int maxDelta = 0;
+        double meanDelta = 0.0;
+        imageDelta(actual, expected, &maxDelta, &meanDelta);
+        QVERIFY2(maxDelta <= 2,
+                 qPrintable(QString("saturation: GPU vs CPU max channel delta %1, mean %2")
+                                .arg(maxDelta).arg(meanDelta, 0, 'f', 3)));
+    }
+
     // A preview nobody can see must not burn a core on frames; it catches up when shown again.
     void hiddenPreviewDoesNoWork() {
         QTemporaryDir dir;
@@ -1191,23 +1477,56 @@ private slots:
                  qPrintable(QString("end box %1,%2 %3x%4").arg(end.x()).arg(end.y()).arg(end.width()).arg(end.height())));
     }
 
-    void uiSmokeButtonsPipAndDrop() {
+    // The window builds: Main.qml loads with no QML errors, exposes, and renders a frame.
+    void uiSmokeWindowBuilds() {
         QTemporaryDir dir;
-        const QString baseVid = makeSampleVideo(dir.path(), "base.mp4", "0x008080", 3.0);
-        const QString pipVid = makeSampleVideo(dir.path(), "pip.mp4", "0xff0000", 3.0);
+        QVERIFY(dir.isValid());
+        UiHarness ui = UiHarness::loadMain(dir.path());
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        QVERIFY2(ui.qmlErrors.isEmpty(), qPrintable(ui.qmlErrors.mid(0, 5).join("\n")));
+
+        const QImage shot = ui.window->grabWindow();
+        QVERIFY(!shot.isNull());
+        QVERIFY(shot.save(dir.path() + "/cutcap_verify.png"));
+    }
+
+    // Every labelled control fits its label at the default window size.
+    void uiSmokeButtonsFitLabels() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = uiSampleVideo("ui_base.mp4", "0x008080", 3.0);
+        QVERIFY(!vid.isEmpty());
+        UiHarness ui = UiHarness::loadMain(dir.path());
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        ui.backend->importSingleMedia(vid);
+        waitForImports(*ui.backend);
+        QTRY_VERIFY2_WITH_TIMEOUT(findItem(ui.window->contentItem(), "assetCard"),
+                                  "the media bin must show the imported card", 10000);
+
+        QStringList problems;
+        int inspected = 0;
+        collectUnreadableButtons(ui.window->contentItem(), &problems, &inspected);
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join("\n")));
+        QVERIFY2(inspected >= 12, qPrintable(QString("only %1 labelled controls were inspected").arg(inspected)));
+    }
+
+    // A clip moved to V2 with a corner transform renders as picture-in-picture: V2 composited
+    // over V1 at 75%/75% at 40% scale, and a live effect on V1 leaves the PiP untouched.
+    void uiSmokePipTransform() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString baseVid = uiSampleVideo("ui_base.mp4", "0x008080", 3.0);
+        const QString pipVid = uiSampleVideo("ui_pip.mp4", "0xff0000", 3.0);
         QVERIFY(!baseVid.isEmpty() && !pipVid.isEmpty());
 
-        QQuickStyle::setStyle("Material");
-        Theme theme(dir.path());
-        Design design(theme);
-        Backend backend;
-        // Register the module's types before injecting instances: a singleton instance seals the
-        // module version, and the module's own registration would then be dropped.
-        extern void qml_register_types_CutCap();
-        qml_register_types_CutCap();
-        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
-        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
-        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        UiHarness ui = UiHarness::create(dir.path());
+        Backend &backend = *ui.backend;
         backend.importSingleMedia(baseVid);
         waitForImports(backend);
         backend.importSingleMedia(pipVid);
@@ -1218,31 +1537,12 @@ private slots:
         backend.setPlayheadSec(1.0);
         backend.updateTransformAtPlayhead(pipClipId, 0.75, 0.75, 0.4, 1.0, 0.0);
 
-        QStringList qmlErrors;
-        g_qmlErrors = &qmlErrors;
-        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
-        QQmlApplicationEngine engine;
-        engine.load(QUrl("qrc:/qml/Main.qml"));
-        qInstallMessageHandler(g_previousHandler);
-        g_qmlErrors = nullptr;
-        QVERIFY2(engine.rootObjects().size() == 1,
-                 qPrintable(qmlErrors.isEmpty() ? QString("Main.qml did not load") : qmlErrors.join("\n")));
-        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
-        QVERIFY(window);
-        QVERIFY(QTest::qWaitForWindowExposed(window));
-        QTest::qWait(1500);
-
-        const QImage shot = window->grabWindow();
-        QVERIFY(!shot.isNull());
-        QVERIFY(shot.save(dir.path() + "/cutcap_verify.png"));
-
-        QVERIFY2(qmlErrors.isEmpty(), qPrintable(qmlErrors.mid(0, 5).join("\n")));
-
-        QStringList problems;
-        int inspected = 0;
-        collectUnreadableButtons(window->contentItem(), &problems, &inspected);
-        QVERIFY2(problems.isEmpty(), qPrintable(problems.join("\n")));
-        QVERIFY2(inspected >= 12, qPrintable(QString("only %1 labelled controls were inspected").arg(inspected)));
+        ui.loadEngine();
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        QQuickWindow *window = ui.window;
 
         // Both lanes render together while paused, decoded without pressing Play, V2 composited on V1.
         QVERIFY2(window->rendererInterface()->graphicsApi() != QSGRendererInterface::Software,
@@ -1252,13 +1552,28 @@ private slots:
         for (const char *name : {"baseLane", "overlayLane"}) {
             auto *laneItem = findItem(canvas, name);
             QVERIFY(laneItem);
-            QCOMPARE(laneItem->property("player").value<QObject *>()->property("playbackState").toInt(), 2 /* Paused */);
+            // The players settle into Paused asynchronously after the window is exposed.
+            QTRY_COMPARE_WITH_TIMEOUT(laneItem->property("player").value<QObject *>()->property("playbackState").toInt(),
+                                      2 /* Paused */, 15000);
         }
-        const qreal dpr = shot.devicePixelRatio();
+        const qreal dpr = window->devicePixelRatio();
         auto colorAt = [&](const QImage &img, qreal fx, qreal fy) {
             const QPointF p = canvas->mapToScene(QPointF(canvas->width() * fx, canvas->height() * fy)) * dpr;
             return img.pixelColor(p.toPoint());
         };
+        // Wait until both lanes have decoded a frame instead of sleeping a fixed time.
+        QTRY_VERIFY2_WITH_TIMEOUT(
+            [&] {
+                const QImage img = window->grabWindow();
+                if (img.isNull())
+                    return false;
+                const QColor b = colorAt(img, 0.3, 0.3);
+                const QColor p = colorAt(img, 0.75, 0.75);
+                return b.red() < 40 && b.green() > 100 && b.blue() > 100 && p.red() > 200 && p.green() < 50 && p.blue() < 50;
+            }(),
+            "V1/V2 previews did not render", 15000);
+        const QImage shot = window->grabWindow();
+        QVERIFY(!shot.isNull());
         const QColor base = colorAt(shot, 0.3, 0.3);
         const QColor pip = colorAt(shot, 0.75, 0.75);
         const QColor pipEdgeOutside = colorAt(shot, 0.75, 0.53);
@@ -1269,23 +1584,51 @@ private slots:
         // Live effects: desaturating V1 must turn the teal preview grey without touching the PiP.
         const QString baseClipId = backend.clipsList().first().toMap().value("id").toString();
         backend.updateClipProperty(baseClipId, "saturation", 0.0);
-        QTest::qWait(300);
+        QTRY_VERIFY2_WITH_TIMEOUT(
+            [&] {
+                const QImage img = window->grabWindow();
+                const QColor grey = colorAt(img, 0.3, 0.3);
+                return std::abs(grey.red() - grey.green()) < 20 && std::abs(grey.green() - grey.blue()) < 20 && grey.red() > 40;
+            }(),
+            "saturation=0 not previewed", 5000);
         const QImage graded = window->grabWindow();
-        const QColor grey = colorAt(graded, 0.3, 0.3);
         const QColor pipAfter = colorAt(graded, 0.75, 0.75);
-        QVERIFY2(std::abs(grey.red() - grey.green()) < 20 && std::abs(grey.green() - grey.blue()) < 20 && grey.red() > 40,
-                 qPrintable("saturation=0 not previewed: " + grey.name()));
         QVERIFY2(pipAfter.red() > 200 && pipAfter.green() < 50, qPrintable("PiP changed by V1 effect: " + pipAfter.name()));
+    }
+
+    // Media lands on the timeline under the pointer: a bin-card drag while scrolled, external
+    // file drops routed by geometry, and the landed clips render filmstrip/waveform visuals.
+    void uiSmokeDragAndDrop() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString baseVid = uiSampleVideo("ui_base.mp4", "0x008080", 3.0);
+        const QString wav = uiSampleTone();
+        const QString desktopFile = uiSampleVideo("ui_desktop_drop.mp4", "0x3366cc", 2.0);
+        QVERIFY(!baseVid.isEmpty() && !wav.isEmpty() && !desktopFile.isEmpty());
+
+        UiHarness ui = UiHarness::loadMain(dir.path());
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        Backend &backend = *ui.backend;
+        QQuickWindow *window = ui.window;
+        backend.importSingleMedia(baseVid);
+        waitForImports(backend);
 
         // Drag a media card onto V1 while the timeline is scrolled: the clip must land under the pointer.
         auto *flick = findItem(window->contentItem(), "timelineFlick");
         auto *dropV1 = findItem(window->contentItem(), "dropV1");
+        QVERIFY(flick && dropV1);
+        QTRY_VERIFY2_WITH_TIMEOUT(findItem(window->contentItem(), "assetCard"),
+                                  "the media bin must show the imported card", 10000);
         auto *card = findItem(window->contentItem(), "assetCard");
-        QVERIFY(flick && dropV1 && card);
+        QVERIFY(card);
         backend.setZoomPxPerSec(60.0);
-        QTest::qWait(50);
+        QTRY_VERIFY2_WITH_TIMEOUT(flick->property("contentWidth").toDouble() > 1000.0,
+                                  "the zoomed timeline must overflow the viewport", 5000);
         flick->setProperty("contentX", 400.0);
-        QTest::qWait(50);
+        QTRY_COMPARE(flick->property("contentX").toDouble(), 400.0);
 
         const QPoint from = card->mapToScene(QPointF(30, 20)).toPoint();
         const QPointF dropLocal(dropV1->mapFromScene(QPointF(flick->mapToScene(QPointF(250, 0)).x(), 0)).x(),
@@ -1298,9 +1641,8 @@ private slots:
             QTest::qWait(10);
         }
         QTest::mouseRelease(window, Qt::LeftButton, {}, to);
-        QTest::qWait(50);
+        QTRY_COMPARE(backend.clipsList().size(), clipsBefore + 1);
 
-        QCOMPARE(backend.clipsList().size(), clipsBefore + 1);
         const QVariantMap dropped = backend.clipsList().last().toMap();
         QCOMPARE(dropped.value("track").toInt(), 0);
         const double expectedSec = dropLocal.x() / 60.0;
@@ -1324,8 +1666,9 @@ private slots:
             };
             return walk(window->contentItem());
         };
+        QTRY_VERIFY2_WITH_TIMEOUT(firstVisible("clipStrip"), "video clips must show filmstrip frames", 10000);
         auto *strip = firstVisible("clipStrip");
-        QVERIFY2(strip, "video clips must show filmstrip frames");
+        QVERIFY(strip);
         QVERIFY(strip->childItems().first()->property("source").toUrl().isLocalFile());
         // The tile size comes from the clip map, so the strip cannot silently crop a 1x1 pixel.
         auto *tile = strip->childItems().first();
@@ -1334,23 +1677,39 @@ private slots:
         QCOMPARE(int(tile->property("sourceClipRect").toRectF().width()), tile->property("tileWidth").toInt());
 
         // An audio file dropped on the bin lands on A1 and draws its waveform.
-        const QString wav = dir.path() + "/tone.wav";
-        QProcess tone;
-        tone.start("ffmpeg", {"-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=300:duration=2", wav});
-        QVERIFY(tone.waitForFinished(10000) && tone.exitCode() == 0);
         backend.importSingleMedia(wav);
         waitForImports(backend);
-        QTest::qWait(200);
         // The waveform is drawn for the visible viewport, and the new clip starts at 0 s while the
         // timeline is scrolled to 400 px, so scroll it into view before looking for it.
         const qreal scrolledX = flick->property("contentX").toDouble();
         flick->setProperty("contentX", 0.0);
-        QTest::qWait(150);
+        QTRY_COMPARE(flick->property("contentX").toDouble(), 0.0);
+        QTRY_VERIFY2_WITH_TIMEOUT(firstVisible("clipWave", false), "audio clips must show a waveform", 10000);
         auto *wave = firstVisible("clipWave", false);
-        QVERIFY2(wave, "audio clips must show a waveform");
+        QVERIFY(wave);
         QVERIFY2(wave->width() > 1.0 && wave->height() > 1.0,
                  qPrintable(QString("waveform is %1x%2").arg(wave->width()).arg(wave->height())));
-        // A canvas that paints nothing would still exist and be sized, so check the pixels.
+        // The waveform canvas paints asynchronously, so wait until its pixels are on screen:
+        // a canvas that paints nothing would still exist and be sized.
+        QTRY_VERIFY2_WITH_TIMEOUT(
+            [&] {
+                auto *w = firstVisible("clipWave", false);
+                if (!w || w->width() <= 1.0 || w->height() <= 1.0)
+                    return false;
+                const QImage img = window->grabWindow();
+                if (img.isNull())
+                    return false;
+                const qreal d = img.devicePixelRatio();
+                const QPointF origin = w->mapToScene(QPointF(0, 0));
+                QSet<QRgb> colours;
+                for (qreal fx = 0.1; fx < 0.9; fx += 0.02) {
+                    const QPoint p = ((origin + QPointF(w->width() * fx, w->height() * 0.5)) * d).toPoint();
+                    if (img.rect().contains(p))
+                        colours.insert(img.pixel(p));
+                }
+                return colours.size() > 1;
+            }(),
+            "the waveform canvas painted nothing", 10000);
         const QImage waveShot = window->grabWindow();
         QVERIFY(!waveShot.isNull());
         const qreal waveDpr = waveShot.devicePixelRatio();
@@ -1365,7 +1724,7 @@ private slots:
         }
         QVERIFY2(waveColours.size() > 1, "the waveform canvas painted nothing");
         flick->setProperty("contentX", scrolledX);
-        QTest::qWait(100);
+        QTRY_COMPARE(flick->property("contentX").toDouble(), scrolledX);
         // Previews arrive off the GUI thread and reset the timeline and bin models, so geometry
         // captured earlier belongs to delegates that no longer exist.
         dropV1 = findItem(window->contentItem(), "dropV1");
@@ -1402,8 +1761,6 @@ private slots:
                  "a point outside the lanes must not claim a lane");
 
         // End to end: a real file drag over V1 goes through Main.qml's DropArea into the lane.
-        const QString desktopFile = makeSampleVideo(dir.path(), "desktop-drop.mp4", "0x3366cc", 2.0);
-        QVERIFY(!desktopFile.isEmpty());
         QMimeData mime;
         mime.setUrls({QUrl::fromLocalFile(desktopFile)});
         const int beforeFileDrop = backend.clipsList().size();
@@ -1415,41 +1772,86 @@ private slots:
         QCoreApplication::sendEvent(window, &move);
         QCoreApplication::sendEvent(window, &drop);
         waitForImports(backend);
-        QTest::qWait(200);
-        QCOMPARE(backend.clipsList().size(), beforeFileDrop + 1);
+        QTRY_COMPARE(backend.clipsList().size(), beforeFileDrop + 1);
         const QVariantMap placed = backend.clipsList().last().toMap();
         QCOMPARE(placed.value("track").toInt(), 0);
         QVERIFY2(std::abs(placed.value("timelineStartSec").toDouble() - atV1) < 0.2,
                  qPrintable(QString("dropped at %1s, expected ~%2s")
                                 .arg(placed.value("timelineStartSec").toDouble())
                                 .arg(atV1)));
+    }
+
+    // Timeline editing through the real delegates: Ctrl+click multi-select, a group-preserving
+    // click, a group drag that keeps spacing, lane header toggles, and the junction transition chip.
+    void uiSmokeTimelineEditing() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString baseVid = uiSampleVideo("ui_base.mp4", "0x008080", 3.0);
+        const QString pipVid = uiSampleVideo("ui_pip.mp4", "0xff0000", 3.0);
+        QVERIFY(!baseVid.isEmpty() && !pipVid.isEmpty());
+
+        UiHarness ui = UiHarness::create(dir.path());
+        Backend &backend = *ui.backend;
+        backend.importSingleMedia(baseVid);
+        waitForImports(backend);
+        const QString baseClipId = backend.selectedClipId();
+        // A second clip from the same asset, butted to the first on V1, for the junction chip.
+        const QString assetId = backend.assetsList().last().toMap().value("id").toString();
+        backend.addAssetToTimeline(assetId, 0, 3.0);
+        const QString droppedId = [&] {
+            for (const QVariant &v : backend.clipsList()) {
+                const QVariantMap m = v.toMap();
+                if (m.value("track").toInt() == 0 && std::abs(m.value("timelineStartSec").toDouble() - 3.0) < 1e-6)
+                    return m.value("id").toString();
+            }
+            return QString();
+        }();
+        QVERIFY(!droppedId.isEmpty());
+        backend.importSingleMedia(pipVid);
+        waitForImports(backend);
+        // The overlay clip for the selection tests: on V2 at 0 s, starting together with V1.
+        const QString pipClipId = backend.selectedClipId();
+        backend.moveClip(pipClipId, 0.0, 1);
+
+        ui.loadEngine();
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        QQuickWindow *window = ui.window;
 
         // Multi-select through the real delegate: Ctrl+click adds, the outline follows.
+        auto *flick = findItem(window->contentItem(), "timelineFlick");
+        QVERIFY(flick);
         flick->setProperty("contentX", 0.0);
-        QTest::qWait(100);
+        QTRY_COMPARE(flick->property("contentX").toDouble(), 0.0);
         backend.selectClip(baseClipId);
         QCOMPARE(backend.selectedClipCount(), 1);
+        QTRY_VERIFY2_WITH_TIMEOUT(
+            [&] { return findClipBody(window->contentItem(), baseClipId) && findClipBody(window->contentItem(), pipClipId); }(),
+            "both clip delegates must exist in the timeline", 10000);
         auto *baseBody = findClipBody(window->contentItem(), baseClipId);
         auto *pipBody = findClipBody(window->contentItem(), pipClipId);
-        QVERIFY2(baseBody && pipBody, "both clip delegates must exist in the timeline");
+        QVERIFY(baseBody && pipBody);
         QCOMPARE(baseBody->property("selected").toBool(), true);
         QCOMPARE(pipBody->property("selected").toBool(), false);
 
         const QPoint pipCenter = pipBody->mapToScene(QPointF(pipBody->width() / 2, pipBody->height() / 2)).toPoint();
         QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, pipCenter);
-        QTest::qWait(150);
-        QCOMPARE(backend.selectedClipCount(), 2);
+        QTRY_COMPARE(backend.selectedClipCount(), 2);
         QVERIFY(backend.selectedClipIds().contains(baseClipId));
         QVERIFY(backend.selectedClipIds().contains(pipClipId));
         QCOMPARE(backend.selectedClipId(), pipClipId);
+        baseBody = findClipBody(window->contentItem(), baseClipId);
+        pipBody = findClipBody(window->contentItem(), pipClipId);
+        QVERIFY(baseBody && pipBody);
         QCOMPARE(baseBody->property("selected").toBool(), true);
         QCOMPARE(pipBody->property("selected").toBool(), true);
 
         // A plain click on one of the selected clips keeps the group instead of collapsing it.
         const QPoint baseCenter = baseBody->mapToScene(QPointF(baseBody->width() / 2, baseBody->height() / 2)).toPoint();
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, baseCenter);
-        QTest::qWait(150);
-        QCOMPARE(backend.selectedClipCount(), 2);
+        QTRY_COMPARE(backend.selectedClipCount(), 2);
 
         // Drag one clip of the selection: the whole group must move by the same amount and keep
         // its spacing, which is the part no backend-only test can see.
@@ -1459,6 +1861,8 @@ private slots:
         const double pipBefore = startOf(backend, pipClipId);
         QVERIFY2(std::abs(baseBefore - pipBefore) < 1e-6, "the two clips start together");
 
+        baseBody = findClipBody(window->contentItem(), baseClipId);
+        QVERIFY(baseBody);
         const QPoint dragFrom = baseBody->mapToScene(QPointF(baseBody->width() / 2, baseBody->height() / 2)).toPoint();
         const QPoint dragTo = dragFrom + QPoint(qRound(2.0 * backend.zoomPxPerSec()), 0);
         QMouseEvent press(QEvent::MouseButtonPress, dragFrom, window->mapToGlobal(dragFrom),
@@ -1472,14 +1876,13 @@ private slots:
         QMouseEvent release(QEvent::MouseButtonRelease, dragTo, window->mapToGlobal(dragTo),
                             Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
         QCoreApplication::sendEvent(window, &release);
-        QTest::qWait(250);
+        QTRY_VERIFY2_WITH_TIMEOUT(startOf(backend, baseClipId) > baseBefore + 0.5,
+                                  qPrintable(QString("the dragged clip did not move (start %1s)").arg(startOf(backend, baseClipId))), 5000);
 
         const double baseStartAfter = startOf(backend, baseClipId);
         const double pipStartAfter = startOf(backend, pipClipId);
         // The exact landing point depends on QML's drag threshold, so assert the property the
         // feature owns: both clips move, by the same amount, keeping their relative offset.
-        QVERIFY2(baseStartAfter > baseBefore + 0.5,
-                 qPrintable(QString("the dragged clip did not move (start %1s)").arg(baseStartAfter)));
         QVERIFY2(pipStartAfter > pipBefore + 0.5,
                  qPrintable(QString("the other selected clip did not follow (start %1s)").arg(pipStartAfter)));
         QVERIFY2(std::abs((baseStartAfter - baseBefore) - (pipStartAfter - pipBefore)) < 1e-6,
@@ -1497,8 +1900,7 @@ private slots:
                  qPrintable(QString("lane toggle is only %1x%2").arg(v2Mute->width()).arg(v2Mute->height())));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           v2Mute->mapToScene(QPointF(v2Mute->width() / 2, v2Mute->height() / 2)).toPoint());
-        QTest::qWait(150);
-        QCOMPARE(backend.lanesList().at(1).toMap().value("muted").toBool(), true);
+        QTRY_COMPARE(backend.lanesList().at(1).toMap().value("muted").toBool(), true);
         QCOMPARE(backend.lanesList().at(0).toMap().value("muted").toBool(), false);
 
         auto *t1Mute = findItem(window->contentItem(), "laneToggle_T1Text_M");
@@ -1524,10 +1926,71 @@ private slots:
                                     .arg(lane).arg(labelRight).arg(toggleLeft)));
         }
 
+        // Junction control: the chip sits exactly where two clips touch, and only there.
+        backend.moveClip(droppedId, endOf(backend, baseClipId), 0);
+        QTRY_VERIFY2_WITH_TIMEOUT(findItem(window->contentItem(), "transitionChip_" + droppedId),
+                                  "a transition chip must appear where two clips touch", 10000);
+        auto *chip = findItem(window->contentItem(), "transitionChip_" + droppedId);
+        QVERIFY2(chip, "a transition chip must appear where two clips touch");
+        QVERIFY2(chip->width() >= 24 && chip->height() >= 24,
+                 qPrintable(QString("transition chip is only %1x%2").arg(chip->width()).arg(chip->height())));
+        auto *droppedBody = findClipBody(window->contentItem(), droppedId);
+        QVERIFY(droppedBody);
+        const qreal junctionX = droppedBody->mapToScene(QPointF(0, 0)).x();
+        const qreal chipCenterX = chip->mapToScene(QPointF(chip->width() / 2, 0)).x();
+        QVERIFY2(std::abs(chipCenterX - junctionX) < 2.0,
+                 qPrintable(QString("chip at %1, junction at %2").arg(chipCenterX).arg(junctionX)));
+
+        // The chip must actually carry the transition: open its menu and pick Dissolve.
+        auto *chipMenu = chip->findChild<QObject *>("transitionMenu_" + droppedId);
+        QVERIFY2(chipMenu, "the junction chip must own a transition menu");
+        auto *dissolveOption = chipMenu->findChild<QObject *>("transitionOption_dissolve");
+        QVERIFY2(dissolveOption, "the menu must offer Dissolve");
+        QVERIFY(QMetaObject::invokeMethod(dissolveOption, "triggered"));
+        auto transitionInOf = [&] {
+            for (const QVariant &v : backend.clipsList())
+                if (v.toMap().value("id").toString() == droppedId)
+                    return v.toMap().value("transitionIn").toString();
+            return QString();
+        };
+        QTRY_COMPARE_WITH_TIMEOUT(transitionInOf(), QString("dissolve"), 5000);
+
+        backend.moveClip(droppedId, endOf(backend, baseClipId) + 3.0, 0);
+        QTRY_VERIFY2_WITH_TIMEOUT(!findItem(window->contentItem(), "transitionChip_" + droppedId),
+                                  "a gap must not offer a transition", 10000);
+    }
+
+    // Layout audits at several window sizes: top bar, transport, bin metadata, inspector
+    // stacking and collapse, card hover swap, scroll affordances, and both dialogs.
+    void uiSmokeLayoutAtSizes() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = uiSampleVideo("ui_base.mp4", "0x008080", 3.0);
+        QVERIFY(!vid.isEmpty());
+
+        UiHarness ui = UiHarness::loadMain(dir.path());
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        Backend &backend = *ui.backend;
+        QQuickWindow *window = ui.window;
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        backend.setZoomPxPerSec(60.0);
+        const QString baseClipId = backend.clipsList().first().toMap().value("id").toString();
+        backend.selectClip(baseClipId);
+        QTRY_VERIFY2_WITH_TIMEOUT(findItem(window->contentItem(), "assetCard"),
+                                  "the media bin must show the imported card", 10000);
+
         // The clip inspector stacks its collapsible sections without overlap and fits inside the scroll viewport.
         auto *inspectorColumn = findItem(window->contentItem(), "clipInspectorColumn");
         auto *inspectorScroll = findItem(window->contentItem(), "clipInspectorScroll");
-        QVERIFY2(inspectorColumn && inspectorScroll, "the clip inspector must stack its sections in one column");
+        QTRY_VERIFY2_WITH_TIMEOUT(inspectorColumn && inspectorScroll,
+                                  "the clip inspector must stack its sections in one column", 10000);
+        QVERIFY(inspectorColumn && inspectorScroll);
+        QTRY_VERIFY2_WITH_TIMEOUT(inspectorColumn->childItems().size() >= 6,
+                                  qPrintable(QString("only %1 inspector sections").arg(inspectorColumn->childItems().size())), 10000);
         QList<QQuickItem *> sections = inspectorColumn->childItems();
         QVERIFY2(sections.size() >= 6, qPrintable(QString("only %1 inspector sections").arg(sections.size())));
         std::sort(sections.begin(), sections.end(), [](QQuickItem *a, QQuickItem *b) { return a->y() < b->y(); });
@@ -1553,21 +2016,20 @@ private slots:
         QVERIFY2(resetLooksBtn->height() >= 24,
                  qPrintable(QString("reset action is only %1 px high").arg(resetLooksBtn->height())));
         backend.selectClip(baseClipId);
-        QTest::qWait(80);
-        QVERIFY(backend.selectedClip().value("saturation").toDouble() < 0.1);
+        backend.updateClipProperty(baseClipId, "saturation", 0.0);
+        QTRY_VERIFY_WITH_TIMEOUT(backend.selectedClip().value("saturation").toDouble() < 0.1, 5000);
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           resetLooksBtn->mapToScene(QPointF(resetLooksBtn->width() / 2, resetLooksBtn->height() / 2)).toPoint());
-        QTest::qWait(80);
-        QVERIFY(std::abs(backend.selectedClip().value("saturation").toDouble() - 1.0) < 1e-6);
+        QTRY_VERIFY2_WITH_TIMEOUT(std::abs(backend.selectedClip().value("saturation").toDouble() - 1.0) < 1e-6,
+                                  "Reset must restore the Neutral look", 5000);
         const qreal transformYExpanded = sectionTransform->y();
         sectionLook->setProperty("expanded", false);
-        QTest::qWait(80);
-        QVERIFY2(sectionTransform->y() < transformYExpanded - 40.0, "collapsing Color & Effects must reclaim vertical space");
+        QTRY_VERIFY2_WITH_TIMEOUT(sectionTransform->y() < transformYExpanded - 40.0,
+                                  "collapsing Color & Effects must reclaim vertical space", 5000);
         QVERIFY2(sectionTransform->y() + 0.5 >= sectionLook->y() + sectionLook->height(), "collapsed section overlaps Transform");
         sectionLook->setProperty("expanded", true);
-        QTest::qWait(80);
-        backend.selectClip(pipClipId);
-        QTest::qWait(80);
+        QTest::qWait(30);
+
         // Media card: metadata and the action strip share one slot, so nothing floats over the
         // name on hover. The overlap only appears in the hover state, so force it.
         auto *binCard = findItem(window->contentItem(), "assetCard");
@@ -1578,9 +2040,8 @@ private slots:
         QVERIFY2(assetMeta->isVisible() && !assetActions->isVisible(),
                  "an idle card shows its metadata, not the actions");
         binCard->setProperty("hovered", true);
-        QTest::qWait(120);
-        QVERIFY2(!assetMeta->isVisible() && assetActions->isVisible(),
-                 "hovering swaps the metadata for the action strip");
+        QTRY_VERIFY2_WITH_TIMEOUT(!assetMeta->isVisible() && assetActions->isVisible(),
+                                  "hovering swaps the metadata for the action strip", 5000);
         QVERIFY2(!(assetMeta->isVisible() && assetActions->isVisible()),
                  "the metadata and the actions must never be on screen together");
         const QRectF nameRect(assetName->mapToScene(QPointF(0, 0)),
@@ -1596,49 +2057,6 @@ private slots:
         QVERIFY2(assetName->width() + 0.5 >= assetName->implicitWidth(),
                  "the asset name must render without being squeezed");
         binCard->setProperty("hovered", false);
-
-        // Junction control: the chip sits exactly where two clips touch, and only there.
-        const QString droppedId = placed.value("id").toString();
-        const auto clipEnd = [&](const QString &id) {
-            for (const QVariant &v : backend.clipsList()) {
-                if (v.toMap().value("id").toString() == id)
-                    return v.toMap().value("timelineStartSec").toDouble()
-                           + v.toMap().value("durationSec").toDouble();
-            }
-            return -1.0;
-        };
-        // Butt the dropped clip against the end of the clip already on V1.
-        backend.moveClip(droppedId, clipEnd(baseClipId), 0);
-        QTest::qWait(150);
-        auto *chip = findItem(window->contentItem(), "transitionChip_" + droppedId);
-        QVERIFY2(chip, "a transition chip must appear where two clips touch");
-        QVERIFY2(chip->width() >= 24 && chip->height() >= 24,
-                 qPrintable(QString("transition chip is only %1x%2").arg(chip->width()).arg(chip->height())));
-        auto *droppedBody = findClipBody(window->contentItem(), droppedId);
-        QVERIFY(droppedBody);
-        const qreal junctionX = droppedBody->mapToScene(QPointF(0, 0)).x();
-        const qreal chipCenterX = chip->mapToScene(QPointF(chip->width() / 2, 0)).x();
-        QVERIFY2(std::abs(chipCenterX - junctionX) < 2.0,
-                 qPrintable(QString("chip at %1, junction at %2").arg(chipCenterX).arg(junctionX)));
-
-        // The chip must actually carry the transition: open its menu and pick Dissolve.
-        auto *chipMenu = chip->findChild<QObject *>("transitionMenu_" + droppedId);
-        QVERIFY2(chipMenu, "the junction chip must own a transition menu");
-        auto *dissolveOption = chipMenu->findChild<QObject *>("transitionOption_dissolve");
-        QVERIFY2(dissolveOption, "the menu must offer Dissolve");
-        QVERIFY(QMetaObject::invokeMethod(dissolveOption, "triggered"));
-        QTest::qWait(250);
-        QString applied;
-        for (const QVariant &v : backend.clipsList()) {
-            if (v.toMap().value("id").toString() == droppedId)
-                applied = v.toMap().value("transitionIn").toString();
-        }
-        QCOMPARE(applied, QString("dissolve"));
-
-        backend.moveClip(droppedId, clipEnd(baseClipId) + 3.0, 0);
-        QTest::qWait(150);
-        QVERIFY2(!findItem(window->contentItem(), "transitionChip_" + droppedId),
-                 "a gap must not offer a transition");
 
         // Layout audit helper: verifies top bar, preview transport, media bin metadata, timeline
         // scroll affordance, and inspector scroll bar at the current window size.
@@ -1699,54 +2117,62 @@ private slots:
 
         // Desktop-window audit (1280x800).
         window->resize(1280, 800);
-        QTest::qWait(350);
-        QCOMPARE(window->size(), QSize(1280, 800));
+        QTRY_COMPARE(window->size(), QSize(1280, 800));
+        QTest::qWait(60); // one frame for the anchored layout to settle at the new size
         auditViewportLayout("1280x800");
         const QImage desktop = window->grabWindow();
         QVERIFY(!desktop.isNull());
         QVERIFY(desktop.save(dir.path() + "/cutcap_desktop.png"));
 
-        // Compact-window audit (900x600): layouts, transport, narrow bin, scrollbars, and dialogs.
+        // Compact-window audits (900x600, 880x580, 800x500).
         window->resize(900, 600);
-        QTest::qWait(400);
-        QCOMPARE(window->size(), QSize(900, 600));
+        QTRY_COMPARE(window->size(), QSize(900, 600));
+        QTest::qWait(60);
         auditViewportLayout("900x600");
 
         window->resize(880, 580);
-        QTest::qWait(400);
-        QCOMPARE(window->size(), QSize(880, 580));
+        QTRY_COMPARE(window->size(), QSize(880, 580));
+        QTest::qWait(60);
         auditViewportLayout("880x580");
 
         window->resize(800, 500);
-        QTest::qWait(400);
-        QCOMPARE(window->size(), QSize(800, 500));
+        QTRY_COMPARE(window->size(), QSize(800, 500));
+        QTest::qWait(60);
         auditViewportLayout("800x500");
 
         auto *timelineHScroll = findItem(window->contentItem(), "timelineHScroll");
         QVERIFY2(timelineHScroll, "timeline must have a horizontal scrollbar");
-        QVERIFY2(timelineHScroll->property("size").toDouble() < 1.0 && timelineHScroll->isVisible(),
-                 "horizontal scrollbar must be visible when timeline clips extend past the viewport");
+        QTRY_VERIFY2_WITH_TIMEOUT(timelineHScroll->property("size").toDouble() < 1.0 && timelineHScroll->isVisible(),
+                                  "horizontal scrollbar must be visible when timeline clips extend past the viewport", 5000);
 
         auto *clipScrollBar = findItem(window->contentItem(), "clipInspectorScrollBar");
         QVERIFY2(clipScrollBar, "clip inspector must expose a vertical scrollbar");
-        QVERIFY2(clipScrollBar->property("size").toDouble() < 1.0 && clipScrollBar->isVisible(),
-                 "inspector scrollbar must be visible when sections overflow a 600px window");
+        QTRY_VERIFY2_WITH_TIMEOUT(clipScrollBar->property("size").toDouble() < 1.0 && clipScrollBar->isVisible(),
+                                  "inspector scrollbar must be visible when sections overflow a 600px window", 5000);
 
         const QImage compact = window->grabWindow();
         QVERIFY(!compact.isNull());
         QVERIFY(compact.save(dir.path() + "/cutcap_compact.png"));
 
-        // Dialog audits inside the 900x600 window: open ExportDialog and ShortcutsDialog, render,
-        // verify button labels, containment inside the window, and live estimate updates.
+        // Dialog audits: open ExportDialog and ShortcutsDialog, render, verify button labels and
+        // containment inside the window.
         auto auditDialog = [&](QObject *dlg, const char *objName, const QString &shotPath) {
             QVERIFY2(dlg, qPrintable(QString("missing dialog %1").arg(objName)));
             QVERIFY(QMetaObject::invokeMethod(dlg, "open"));
-            QTest::qWait(280);
             auto *dlgContent = dlg->property("contentItem").value<QQuickItem *>();
             auto *dlgBg = dlg->property("background").value<QQuickItem *>();
-            QVERIFY2(dlgContent && dlgBg && dlgBg->isVisible(), qPrintable(QString("dialog %1 did not open").arg(objName)));
-            const QRectF bgRect(dlgBg->mapToScene(QPointF(0, 0)), QSizeF(dlgBg->width(), dlgBg->height()));
+            QTRY_VERIFY2_WITH_TIMEOUT(dlgContent && dlgBg && dlgBg->isVisible(),
+                                      qPrintable(QString("dialog %1 did not open").arg(objName)), 5000);
             const QRectF winRect(0, 0, window->width(), window->height());
+            // The open animation moves the dialog background, so wait until it has settled.
+            QTRY_VERIFY2_WITH_TIMEOUT(
+                [&] {
+                    const QRectF bg(dlgBg->mapToScene(QPointF(0, 0)), QSizeF(dlgBg->width(), dlgBg->height()));
+                    return winRect.contains(bg.adjusted(1, 1, -1, -1));
+                }(),
+                qPrintable(QString("dialog %1 overflows the %2x%3 window")
+                               .arg(objName).arg(window->width()).arg(window->height())), 5000);
+            const QRectF bgRect(dlgBg->mapToScene(QPointF(0, 0)), QSizeF(dlgBg->width(), dlgBg->height()));
             QVERIFY2(winRect.contains(bgRect.adjusted(1, 1, -1, -1)),
                      qPrintable(QString("dialog %1 (%2x%3 at %4,%5) overflows %6x%7 window")
                                     .arg(objName).arg(bgRect.width()).arg(bgRect.height())
@@ -1767,18 +2193,17 @@ private slots:
         auto *exportStartBtn = exportDlg->findChild<QQuickItem *>("exportStartButton");
         QVERIFY(exportEst && exportResCombo && exportStartBtn);
         QVERIFY(exportStartBtn->isEnabled());
-        QVERIFY(exportEst->property("text").toString().contains("1920×1080"));
+        QTRY_VERIFY_WITH_TIMEOUT(exportEst->property("text").toString().contains("1920×1080"), 5000);
         exportResCombo->setProperty("currentIndex", 1);
-        QTest::qWait(80);
-        QVERIFY2(exportEst->property("text").toString().contains("3840×2160"),
-                 qPrintable("resolution combo change did not update estimate: " + exportEst->property("text").toString()));
+        QTRY_VERIFY2_WITH_TIMEOUT(exportEst->property("text").toString().contains("3840×2160"),
+                                  qPrintable("resolution combo change did not update estimate: " + exportEst->property("text").toString()), 5000);
         QVERIFY(QMetaObject::invokeMethod(exportDlg, "close"));
-        QTest::qWait(150);
+        QTRY_VERIFY2_WITH_TIMEOUT(!exportDlg->property("opened").toBool(), "the export dialog did not close", 5000);
 
         QObject *shortcutsDlg = window->findChild<QObject *>("shortcutsDialog");
         auditDialog(shortcutsDlg, "shortcutsDialog", dir.path() + "/cutcap_shortcuts_dialog.png");
         QVERIFY(QMetaObject::invokeMethod(shortcutsDlg, "close"));
-        QTest::qWait(150);
+        QTRY_VERIFY2_WITH_TIMEOUT(!shortcutsDlg->property("opened").toBool(), "the shortcuts dialog did not close", 5000);
     }
 
     // ---- multi-select -------------------------------------------------------
@@ -1808,6 +2233,15 @@ private slots:
         for (const QVariant &v : b.clipsList()) {
             if (v.toMap().value("id").toString() == clipId)
                 return v.toMap().value("timelineStartSec").toDouble();
+        }
+        return -1.0;
+    }
+
+    static double endOf(Backend &b, const QString &clipId) {
+        for (const QVariant &v : b.clipsList()) {
+            if (v.toMap().value("id").toString() == clipId)
+                return v.toMap().value("timelineStartSec").toDouble()
+                       + v.toMap().value("durationSec").toDouble();
         }
         return -1.0;
     }
@@ -2393,6 +2827,21 @@ private slots:
         QCOMPARE(b.clipsList().size(), 2);
     }
 
+    // espeak reads any argument starting with "-" as an option, so TTS text like "-rf /etc/passwd"
+    // must come after a "--" separator. The separator has to sit directly before the text argument.
+    void testEspeakTtsArgsEndOptionsBeforeText() {
+        const QStringList args = MediaEngine::buildEspeakTtsArgs("/tmp/out.wav", "-rf /etc/passwd");
+        const QStringList expected{"-w", "/tmp/out.wav", "--", "-rf /etc/passwd"};
+        QVERIFY2(args == expected, qPrintable(args.join(' ')));
+        QCOMPARE(args.indexOf("--"), 2);
+        QVERIFY(args.last().startsWith("-"));
+
+        // Plain text is also spoken after "--", at the same position.
+        const QStringList plain = MediaEngine::buildEspeakTtsArgs("/tmp/out.wav", "hello world");
+        QCOMPARE(plain.indexOf("--"), 2);
+        QCOMPARE(plain.last(), QString("hello world"));
+    }
+
     // A failing import must not move the user's last clip onto the audio lane, and must not
     // replace the import error with a success status.
     void testTtsImportFailureLeavesTimeline() {
@@ -2541,6 +2990,91 @@ private slots:
         const int builds = backend.clipsListBuilds() - before;
         QVERIFY2(builds >= 1, "the timeline did not refresh after the edit");
         QVERIFY2(builds <= 2, qPrintable(QString("one edit rebuilt the clip list %1 times").arg(builds)));
+    }
+
+    // One slider tick (a single clip-property edit) must reach the timeline as dataChanged for the
+    // changed row only: the lane delegates are updated in place, not destroyed and recreated the
+    // way they were when every timelineChanged re-read a QVariantList clipsList.
+    void oneEditCreatesNoNewDelegates() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString vid = makeSampleVideo(dir.path(), "delegates.mp4", "0x336699", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        UiHarness ui = UiHarness::loadMain(dir.path());
+        QVERIFY2(ui.engine->rootObjects().size() == 1,
+                 qPrintable(ui.qmlErrors.isEmpty() ? QString("Main.qml did not load") : ui.qmlErrors.join("\n")));
+        QVERIFY(ui.window);
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        Backend &backend = *ui.backend;
+        QQuickWindow *window = ui.window;
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        // A second clip on the same lane, so "all delegates recreated" is visible, not just one.
+        const QString assetId = backend.assetsList().last().toMap().value("id").toString();
+        backend.addAssetToTimeline(assetId, 0, 2.0);
+        QCOMPARE(backend.clipCount(), 2);
+        QString firstId, secondId;
+        for (const QVariant &v : backend.clipsList()) {
+            const QString id = v.toMap().value("id").toString();
+            if (firstId.isEmpty())
+                firstId = id;
+            else
+                secondId = id;
+        }
+        QVERIFY(!firstId.isEmpty() && !secondId.isEmpty());
+        QTest::qWait(300);
+
+        QTRY_VERIFY2_WITH_TIMEOUT(findClipBody(window->contentItem(), firstId) != nullptr &&
+                                      findClipBody(window->contentItem(), secondId) != nullptr,
+                                  "both clip delegates must exist in the timeline", 10000);
+        auto *firstBody = findClipBody(window->contentItem(), firstId);
+        auto *secondBody = findClipBody(window->contentItem(), secondId);
+        QVERIFY(firstBody && secondBody);
+
+        auto *model = backend.clipModel();
+        QVERIFY(model);
+        QCOMPARE(model->rowCount(), 2);
+        const int idRole = model->roleNames().key("id");
+        const int brightnessRole = model->roleNames().key("brightness");
+        QVERIFY(idRole != 0 && brightnessRole != 0);
+        QSignalSpy dataSpy(model, &QAbstractItemModel::dataChanged);
+        QSignalSpy resetSpy(model, &QAbstractItemModel::modelReset);
+        QSignalSpy insertedSpy(model, &QAbstractItemModel::rowsInserted);
+        QSignalSpy removedSpy(model, &QAbstractItemModel::rowsRemoved);
+        QVERIFY(dataSpy.isValid() && resetSpy.isValid() && insertedSpy.isValid() && removedSpy.isValid());
+
+        // One slider tick: a single property edit on one clip.
+        backend.updateClipProperty(firstId, "brightness", 0.25);
+        QTest::qWait(300);
+
+        // The edit arrived as row data, and only as row data: no reset, no insert, no remove.
+        QVERIFY2(dataSpy.count() >= 1, "the edit must reach the clip model as dataChanged");
+        QCOMPARE(resetSpy.count(), 0);
+        QCOMPARE(insertedSpy.count(), 0);
+        QCOMPARE(removedSpy.count(), 0);
+
+        // The edited value is readable through the model row.
+        int firstRow = -1;
+        for (int i = 0; i < model->rowCount(); ++i) {
+            if (model->data(model->index(i), idRole).toString() == firstId)
+                firstRow = i;
+        }
+        QVERIFY2(firstRow >= 0, "the edited clip must be a row of the clip model");
+        QCOMPARE(model->data(model->index(firstRow), brightnessRole).toDouble(), 0.25);
+
+        // Zero delegate creations for the edit: the very same items are still in the tree.
+        // (QVERIFY, not QCOMPARE: a recreated delegate is already destroyed, and QTest would
+        // dereference the stale pointer while formatting a QCOMPARE failure.)
+        auto *firstBodyAfter = findClipBody(window->contentItem(), firstId);
+        auto *secondBodyAfter = findClipBody(window->contentItem(), secondId);
+        QVERIFY2(firstBodyAfter == firstBody,
+                 qPrintable(QString("the edited clip's delegate was recreated (%1 -> %2)")
+                                .arg(quintptr(firstBody)).arg(quintptr(firstBodyAfter))));
+        QVERIFY2(secondBodyAfter == secondBody,
+                 qPrintable(QString("the untouched clip's delegate was recreated (%1 -> %2)")
+                                .arg(quintptr(secondBody)).arg(quintptr(secondBodyAfter))));
     }
 
     void timelineCreatesOnlyVisibleItems() {
@@ -2788,6 +3322,83 @@ private slots:
         QTRY_VERIFY2(backend.playing(), "Space after a mouse click must still play");
         QVERIFY(!exportDialog->property("opened").toBool());
         backend.setPlaying(false);
+    }
+
+    // Arrow keys on a keyboard-focused inspector slider adjust the slider only; the application-level
+    // Left/Right playhead shortcuts must not fire on top of them.
+    void sliderArrowsAdjustSliderNotPlayhead() {
+        QTemporaryDir dir;
+        const QString vid = makeSampleVideo(dir.path(), "sliderkeys.mp4", "0x336699", 2.0);
+        QVERIFY(!vid.isEmpty());
+
+        QQuickStyle::setStyle("Material");
+        Theme theme(dir.path());
+        Design design(theme);
+        Backend backend;
+        // Register the module's types before injecting instances: a singleton instance seals the
+        // module version, and the module's own registration would then be dropped.
+        extern void qml_register_types_CutCap();
+        qml_register_types_CutCap();
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Theme", &theme);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Design", &design);
+        qmlRegisterSingletonInstance("CutCap", 1, 0, "Backend", &backend);
+        QStringList qmlErrors;
+        g_qmlErrors = &qmlErrors;
+        g_previousHandler = qInstallMessageHandler(captureQmlErrors);
+        QQmlApplicationEngine engine;
+        engine.load(QUrl("qrc:/qml/Main.qml"));
+        qInstallMessageHandler(g_previousHandler);
+        g_qmlErrors = nullptr;
+        QVERIFY2(engine.rootObjects().size() == 1, qPrintable(qmlErrors.join("\n")));
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY2(qmlErrors.isEmpty(), qPrintable(qmlErrors.mid(0, 5).join("\n")));
+
+        backend.importSingleMedia(vid);
+        waitForImports(backend);
+        QCOMPARE(backend.clipsList().size(), 1);
+        window->requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(window));
+        backend.setPlayheadSec(1.0);
+        QCOMPARE(backend.playheadSec(), 1.0);
+
+        // The selected clip opens the clip inspector, which holds one slider per value row.
+        QList<QQuickItem *> sliders;
+        const auto items = window->findChildren<QQuickItem *>();
+        for (auto *item : items) {
+            if (item->inherits("QQuickSlider") && item->isVisible())
+                sliders.append(item);
+        }
+        QVERIFY2(sliders.size() >= 5,
+                 qPrintable(QString("only %1 visible sliders in the inspector").arg(sliders.size())));
+        auto *slider = sliders.first();
+        QVERIFY(slider->property("stepSize").toDouble() > 0);
+        QVERIFY(slider->property("value").toDouble() < slider->property("to").toDouble());
+
+        slider->forceActiveFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(slider->hasActiveFocus());
+        const double valueBefore = slider->property("value").toDouble();
+        const double playheadBefore = backend.playheadSec();
+
+        QTest::keyClick(window, Qt::Key_Right);
+        QTest::qWait(100);
+
+        QVERIFY2(slider->property("value").toDouble() > valueBefore,
+                 "Right arrow did not adjust the keyboard-focused slider");
+        QVERIFY2(backend.playheadSec() == playheadBefore,
+                 "Right arrow on a focused slider moved the playhead");
+
+        // Positive control: with focus off the slider, Right still nudges the playhead.
+        auto *exportButton = window->findChild<QQuickItem *>("exportButton");
+        QVERIFY2(exportButton, "the Export button does not exist");
+        exportButton->forceActiveFocus(Qt::TabFocusReason);
+        QTRY_VERIFY(exportButton->hasActiveFocus());
+        QTRY_VERIFY(!slider->hasActiveFocus());
+        QTest::keyClick(window, Qt::Key_Right);
+        QTest::qWait(100);
+        QVERIFY2(backend.playheadSec() > playheadBefore,
+                 "Right with no slider focused no longer nudges the playhead");
     }
 
     // Media I/O must not block the GUI thread: the call returns at once and the asset, its real

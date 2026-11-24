@@ -1,13 +1,20 @@
 #include "clipframeitem.h"
 
 #include <QQuickWindow>
+#include <QSGGeometry>
+#include <QSGMaterial>
+#include <QSGMaterialShader>
+#include <QSGNode>
 #include <QSGSimpleTextureNode>
+#include <QSGTexture>
 #include <QUrl>
 #include <QVideoFrameFormat>
 #include <QtConcurrent/QtConcurrent>
 #include <QtQml/qqml.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 bool ClipLook::isIdentity() const {
@@ -67,6 +74,16 @@ void boxBlur(std::vector<float> &plane, int w, int h, int radius) {
 
 } // namespace
 
+namespace {
+
+std::atomic<qint64> s_cpuPixelsProcessed{0};
+
+} // namespace
+
+qint64 ClipFrameItem::cpuPixelsProcessed() {
+    return s_cpuPixelsProcessed.load();
+}
+
 QImage ClipFrameItem::process(const QImage &source, const ClipLook &look) {
     if (source.isNull())
         return {};
@@ -77,6 +94,7 @@ QImage ClipFrameItem::process(const QImage &source, const ClipLook &look) {
     const int w = in.width();
     const int h = in.height();
     const size_t n = size_t(w) * h;
+    s_cpuPixelsProcessed += qint64(n);
     const Matrix &m = look.bt709 ? kBt709 : kBt601;
     std::vector<float> Y(n), U(n), V(n), A(n);
 
@@ -160,6 +178,148 @@ QImage ClipFrameItem::process(const QImage &source, const ClipLook &look) {
     return out;
 }
 
+namespace {
+
+// The look shader's blur loop has a fixed tap budget (MAXR in look.frag); a frame whose blur
+// radius in image pixels exceeds this is still processed exactly, on the CPU.
+constexpr double kMaxShaderBlurRadius = 16.0;
+constexpr int kLookUniformVecs = 9; // keep in step with look.frag's u[9]
+
+class LookShader : public QSGMaterialShader {
+public:
+    LookShader();
+    bool updateUniformData(RenderState &state, QSGMaterial *newMaterial, QSGMaterial *oldMaterial) override;
+    void updateSampledImage(RenderState &state, int binding, QSGTexture **texture, QSGMaterial *newMaterial,
+                            QSGMaterial *oldMaterial) override;
+};
+
+// Inherits QSGTextureMaterial so the texture binding path is exactly Qt's own; only the shader
+// (and the extra look uniforms) are ours.
+class LookMaterial : public QSGTextureMaterial {
+public:
+    LookMaterial() {
+        setFlag(Blending);   // the shader outputs premultiplied alpha (chroma key)
+        setFlag(NoBatching); // one quad per item; per-node uniforms must not be merged
+    }
+    QSGMaterialType *type() const override { return &s_type; }
+    QSGMaterialShader *createShader(QSGRendererInterface::RenderMode) const override { return new LookShader; }
+    int compare(const QSGMaterial *other) const override {
+        if (other->type() != type())
+            return 1;
+        const auto *o = static_cast<const LookMaterial *>(other);
+        return (texture() == o->texture() && std::memcmp(m_uniforms, o->m_uniforms, sizeof(m_uniforms)) == 0) ? 0 : 1;
+    }
+
+    float m_uniforms[kLookUniformVecs * 4] = {};
+    static QSGMaterialType s_type;
+};
+
+QSGMaterialType LookMaterial::s_type;
+
+LookShader::LookShader() {
+    // The .qsb packs next to the .vert/.frag sources are baked with qsb (see look.frag).
+    setShaderFileName(VertexStage, QStringLiteral(":/shaders/look.vert.qsb"));
+    setShaderFileName(FragmentStage, QStringLiteral(":/shaders/look.frag.qsb"));
+}
+
+bool LookShader::updateUniformData(RenderState &state, QSGMaterial *newMaterial, QSGMaterial *oldMaterial) {
+    const auto *m = static_cast<const LookMaterial *>(newMaterial);
+    bool dirty = false;
+    QByteArray *buf = state.uniformData();
+    if (state.isMatrixDirty()) {
+        const QMatrix4x4 matrix = state.combinedMatrix();
+        std::memcpy(buf->data(), matrix.constData(), 64);
+        dirty = true;
+    }
+    if (state.isOpacityDirty()) {
+        const float opacity = state.opacity();
+        std::memcpy(buf->data() + 64, &opacity, 4);
+        dirty = true;
+    }
+    const auto *old = oldMaterial ? static_cast<const LookMaterial *>(oldMaterial) : nullptr;
+    if (!old || old->texture() != m->texture() ||
+        std::memcmp(old->m_uniforms, m->m_uniforms, sizeof(m->m_uniforms)) != 0) {
+        // std140: mat4 at 0, float at 64, the vec4 array u[9] starts at the next 16-byte boundary.
+        Q_ASSERT(buf->size() >= 80 + int(sizeof(m->m_uniforms)));
+        std::memcpy(buf->data() + 80, m->m_uniforms, sizeof(m->m_uniforms));
+        dirty = true;
+    }
+    return dirty;
+}
+
+void LookShader::updateSampledImage(RenderState &state, int binding, QSGTexture **texture, QSGMaterial *newMaterial, QSGMaterial *) {
+    if (binding != 1)
+        return;
+    QSGTexture *t = static_cast<LookMaterial *>(newMaterial)->texture();
+    *texture = t;
+    // Uploads the image data to the QRhiTexture if not done yet; without this the sampler
+    // would bind the renderer's dummy texture.
+    if (t)
+        t->commitTextureOperations(state.rhi(), state.resourceUpdateBatch());
+}
+
+// A textured quad drawn through LookMaterial: the frame texture in, the look applied per pixel
+// in the fragment shader. QSGSimpleTextureNode owns the geometry and the texture; the material
+// is swapped for ours so the look runs in the shader instead of on the CPU.
+class LookNode : public QSGSimpleTextureNode {
+public:
+    LookNode() {
+        setOwnsTexture(true);
+        setFiltering(QSGTexture::Linear);
+        // QSGSimpleTextureNode wires its own texture materials in its constructor; replace both
+        // so the renderer picks up ours.
+        setMaterial(new LookMaterial);
+        setOpaqueMaterial(nullptr);
+        setFlag(OwnsMaterial);
+    }
+
+    void setTexture(QSGTexture *texture) {
+        QSGSimpleTextureNode::setTexture(texture);
+        texture->setFiltering(QSGTexture::Linear);
+        texture->setMipmapFiltering(QSGTexture::None); // no mipmaps: a mipmap sampler would be incomplete
+        texture->setHorizontalWrapMode(QSGTexture::ClampToEdge);
+        texture->setVerticalWrapMode(QSGTexture::ClampToEdge);
+        static_cast<LookMaterial *>(material())->setTexture(texture);
+    }
+
+    // Fills the shader uniforms from the look, with the same clamping process() applies.
+    void setLook(const ClipLook &look, const QSize &texSize) {
+        const Matrix &m = look.bt709 ? kBt709 : kBt601;
+        const int w = texSize.width();
+        const int h = texSize.height();
+        const bool eqActive = std::abs(look.brightness) >= 1e-3 || std::abs(look.contrast - 1.0) >= 1e-3 ||
+                              std::abs(look.saturation - 1.0) >= 1e-3;
+        const int rRaw = look.blurRadius >= 0.5 ? int(std::lround(look.blurRadius)) : 0;
+        const int rMax = std::min((w - 1) / 2, (h - 1) / 2);
+        const int rY = std::min(rRaw, rMax);
+        const int rC = std::min(2 * rRaw, rMax);
+        const double kr = look.keyColor.red(), kg = look.keyColor.green(), kb = look.keyColor.blue();
+        const double keyU = -0.16874 * kr - 0.33126 * kg + 0.5 * kb + 128.0;
+        const double keyV = 0.5 * kr - 0.41869 * kg - 0.08131 * kb + 128.0;
+        const double dmax = std::hypot(w / 2.0, h / 2.0);
+
+        float *u = static_cast<LookMaterial *>(material())->m_uniforms;
+        const auto put = [&](int i, float x, float y, float z, float v) {
+            u[i * 4 + 0] = x;
+            u[i * 4 + 1] = y;
+            u[i * 4 + 2] = z;
+            u[i * 4 + 3] = v;
+        };
+        put(0, float(m.yr), float(m.yg), float(m.yb), 16.0f);
+        put(1, float(m.ur), float(m.ug), float(m.ub), 128.0f);
+        put(2, float(m.vr), float(m.vg), float(m.vb), 128.0f);
+        put(3, float(m.rv), float(m.gu), float(m.gv), float(m.bu));
+        put(4, eqActive ? 1.0f : 0.0f, float(look.brightness), float(look.contrast), float(look.saturation));
+        put(5, float(rY), float(rC), look.vignette ? 1.0f : 0.0f, look.chromaKey ? 1.0f : 0.0f);
+        put(6, float(keyU), float(keyV), float(look.similarity), float(look.blend));
+        put(7, float(w), float(h), float(dmax), 1.164384f);
+        put(8, 1.0f / float(w), 1.0f / float(h), 0.0f, 0.0f);
+        markDirty(QSGNode::DirtyMaterial);
+    }
+};
+
+} // namespace
+
 ClipFrameItem::ClipFrameItem(QQuickItem *parent) : QQuickItem(parent), m_sink(new QVideoSink(this)) {
     setFlag(ItemHasContents, true);
     connect(m_sink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
@@ -171,6 +331,7 @@ ClipFrameItem::ClipFrameItem(QQuickItem *parent) : QQuickItem(parent), m_sink(ne
     connect(&m_watcher, &QFutureWatcher<QImage>::finished, this, [this] {
         const bool hadFrame = hasFrame();
         m_output = m_watcher.result();
+        m_outputProcessed = m_lastRunCpu.load();
         m_textureDirty = true;
         update();
         if (hadFrame != hasFrame())
@@ -180,7 +341,7 @@ ClipFrameItem::ClipFrameItem(QQuickItem *parent) : QQuickItem(parent), m_sink(ne
             scheduleProcessing();
         }
     });
-    connect(this, &ClipFrameItem::lookChanged, this, &ClipFrameItem::scheduleProcessing);
+    connect(this, &ClipFrameItem::lookChanged, this, &ClipFrameItem::applyLookChange);
     connect(this, &QQuickItem::visibleChanged, this, &ClipFrameItem::resumeIfPending);
 }
 
@@ -277,6 +438,31 @@ ClipLook ClipFrameItem::currentLook() const {
     return look;
 }
 
+double ClipFrameItem::effectiveBlurRadius() const {
+    if (m_output.isNull())
+        return 0.0;
+    // Blur is given in export pixels for a clip `referenceHeight` tall; scale it to this image.
+    return m_referenceHeight > 0.0 ? m_blur * m_output.height() / m_referenceHeight : m_blur;
+}
+
+// A look change on a frame that is already on the GPU only moves uniforms: the scene graph
+// re-runs the shader, no pixel is touched on the CPU.
+void ClipFrameItem::applyLookChange() {
+    if (!canBeSeen()) {
+        m_pendingWhileUnseen = true;
+        return;
+    }
+    if (m_watcher.isRunning()) {
+        m_dirtyWhileBusy = true;
+        return;
+    }
+    if (!hasFrame() || m_outputProcessed || effectiveBlurRadius() > kMaxShaderBlurRadius) {
+        scheduleProcessing();
+        return;
+    }
+    update();
+}
+
 void ClipFrameItem::scheduleProcessing() {
     if (!canBeSeen()) {
         m_pendingWhileUnseen = true;
@@ -303,8 +489,9 @@ void ClipFrameItem::scheduleProcessing() {
     ClipLook look = currentLook();
     const double blur = m_blur;
     const double referenceHeight = m_referenceHeight;
-    m_watcher.setFuture(QtConcurrent::run([source, frame, target, look, blur, referenceHeight]() mutable {
+    m_watcher.setFuture(QtConcurrent::run([source, frame, target, look, blur, referenceHeight, this]() mutable {
         // Downloading and converting the frame is the expensive part; it belongs on this thread.
+        // The look itself runs in the shader at paint time, not here.
         const QImage decoded = source.isNull() && frame.isValid() ? frame.toImage() : source;
         if (decoded.isNull())
             return QImage();
@@ -313,30 +500,63 @@ void ClipFrameItem::scheduleProcessing() {
                                   : decoded;
         // Blur is given in export pixels for a clip `referenceHeight` tall; scale it to this image.
         look.blurRadius = referenceHeight > 0.0 ? blur * scaled.height() / referenceHeight : blur;
-        return process(scaled, look);
+        if (!look.isIdentity() && look.blurRadius > kMaxShaderBlurRadius) {
+            // Beyond the shader's tap budget: keep the frame exact on the CPU.
+            m_lastRunCpu = true;
+            return process(scaled, look);
+        }
+        m_lastRunCpu = false;
+        return scaled.convertToFormat(QImage::Format_ARGB32);
     }));
 }
 
 QSGNode *ClipFrameItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) {
-    auto *node = static_cast<QSGSimpleTextureNode *>(oldNode);
     if (m_output.isNull() || width() <= 0 || height() <= 0) {
-        delete node;
+        delete oldNode;
         return nullptr;
     }
-    if (!node) {
-        node = new QSGSimpleTextureNode;
-        node->setOwnsTexture(true);
-        node->setFiltering(QSGTexture::Linear);
-        m_textureDirty = true;
-    }
-    if (m_textureDirty) {
-        // ownsTexture: setTexture() deletes the previous texture itself.
-        node->setTexture(window()->createTextureFromImage(m_output, QQuickWindow::TextureHasAlphaChannel));
-        m_textureDirty = false;
-    }
+    ClipLook look = currentLook();
+    look.blurRadius = effectiveBlurRadius();
     const QSizeF img = m_output.size();
     const double s = std::min(width() / img.width(), height() / img.height());
     const QSizeF fitted(img.width() * s, img.height() * s);
-    node->setRect(QRectF(QPointF((width() - fitted.width()) / 2.0, (height() - fitted.height()) / 2.0), fitted));
+    const QRectF rect(QPointF((width() - fitted.width()) / 2.0, (height() - fitted.height()) / 2.0), fitted);
+
+    // Frames that came back from the CPU fallback, or that need no look at all, are plain
+    // textures; every other look is applied by the shader while painting.
+    if (m_outputProcessed || look.isIdentity()) {
+        // A LookNode must not be reused here: its material would keep applying the old look.
+        auto *node = dynamic_cast<LookNode *>(oldNode) ? nullptr : dynamic_cast<QSGSimpleTextureNode *>(oldNode);
+        if (!node) {
+            delete oldNode;
+            node = new QSGSimpleTextureNode;
+            node->setOwnsTexture(true);
+            node->setFiltering(QSGTexture::Linear);
+            m_textureDirty = true;
+        }
+        if (m_textureDirty) {
+            // ownsTexture: setTexture() deletes the previous texture itself.
+            const QImage upload = m_output.format() == QImage::Format_ARGB32_Premultiplied
+                                     ? m_output
+                                     : m_output.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+            node->setTexture(window()->createTextureFromImage(upload, QQuickWindow::TextureHasAlphaChannel));
+            m_textureDirty = false;
+        }
+        node->setRect(rect);
+        return node;
+    }
+
+    auto *node = dynamic_cast<LookNode *>(oldNode);
+    if (!node) {
+        delete oldNode;
+        node = new LookNode;
+        m_textureDirty = true;
+    }
+    if (m_textureDirty) {
+        node->setTexture(window()->createTextureFromImage(m_output));
+        m_textureDirty = false;
+    }
+    node->setRect(rect);
+    node->setLook(look, m_output.size());
     return node;
 }

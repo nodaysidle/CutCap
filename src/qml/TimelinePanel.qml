@@ -12,8 +12,9 @@ Rectangle {
     readonly property int headerWidth: 168
     readonly property int trackHeight: Design.trackH
     readonly property real pxPerSec: Backend.zoomPxPerSec
-    // Read once here: every `Backend.clipsList` read rebuilds the whole list in C++.
-    readonly property var clips: Backend.clipsList
+    // The row-level clip model: an edit arrives as dataChanged for the changed row, so the lane
+    // delegates below are updated in place instead of being rebuilt on every timelineChanged.
+    readonly property var clipModel: Backend.clipModel
     readonly property var lanes: Backend.lanesList
     readonly property real timelineWidth: Math.max(timelineFlick.width, (Backend.totalDuration + 10) * pxPerSec)
 
@@ -423,13 +424,31 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: root.clips
+                            model: root.clipModel
                             delegate: Loader {
                                 id: delegateRoot1
-                                required property var modelData
-                                active: delegateRoot1.modelData.track === 1
+                                required property var model
+                                active: model.track === 1
                                 sourceComponent: clipDelegate
-                                property var clipData: delegateRoot1.modelData
+                                // Plain object rebuilt when the row's dataChanged arrives, so the
+                                // delegate below keeps binding to `clipData.<key>` as before.
+                                property var clipData: ({
+                                    id: model.id,
+                                    kind: model.kind,
+                                    track: model.track,
+                                    name: model.name,
+                                    timelineStartSec: model.timelineStartSec,
+                                    sourceInSec: model.sourceInSec,
+                                    durationSec: model.durationSec,
+                                    sourceDurationSec: model.sourceDurationSec,
+                                    speed: model.speed,
+                                    filmstripPath: model.filmstripPath,
+                                    filmstripFrames: model.filmstripFrames,
+                                    filmstripTileWidth: model.filmstripTileWidth,
+                                    filmstripTileHeight: model.filmstripTileHeight,
+                                    waveformPeaks: model.waveformPeaks,
+                                    keyframes: model.keyframes
+                                })
                                 property color laneColor: Design.laneV2
                             }
                         }
@@ -454,13 +473,29 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: root.clips
+                            model: root.clipModel
                             delegate: Loader {
                                 id: delegateRoot2
-                                required property var modelData
-                                active: delegateRoot2.modelData.track === 0
+                                required property var model
+                                active: model.track === 0
                                 sourceComponent: clipDelegate
-                                property var clipData: delegateRoot2.modelData
+                                property var clipData: ({
+                                    id: model.id,
+                                    kind: model.kind,
+                                    track: model.track,
+                                    name: model.name,
+                                    timelineStartSec: model.timelineStartSec,
+                                    sourceInSec: model.sourceInSec,
+                                    durationSec: model.durationSec,
+                                    sourceDurationSec: model.sourceDurationSec,
+                                    speed: model.speed,
+                                    filmstripPath: model.filmstripPath,
+                                    filmstripFrames: model.filmstripFrames,
+                                    filmstripTileWidth: model.filmstripTileWidth,
+                                    filmstripTileHeight: model.filmstripTileHeight,
+                                    waveformPeaks: model.waveformPeaks,
+                                    keyframes: model.keyframes
+                                })
                                 property color laneColor: Design.laneV1
                             }
                         }
@@ -530,13 +565,29 @@ Rectangle {
                         }
 
                         Repeater {
-                            model: root.clips
+                            model: root.clipModel
                             delegate: Loader {
                                 id: delegateRoot3
-                                required property var modelData
-                                active: delegateRoot3.modelData.track === 2
+                                required property var model
+                                active: model.track === 2
                                 sourceComponent: clipDelegate
-                                property var clipData: delegateRoot3.modelData
+                                property var clipData: ({
+                                    id: model.id,
+                                    kind: model.kind,
+                                    track: model.track,
+                                    name: model.name,
+                                    timelineStartSec: model.timelineStartSec,
+                                    sourceInSec: model.sourceInSec,
+                                    durationSec: model.durationSec,
+                                    sourceDurationSec: model.sourceDurationSec,
+                                    speed: model.speed,
+                                    filmstripPath: model.filmstripPath,
+                                    filmstripFrames: model.filmstripFrames,
+                                    filmstripTileWidth: model.filmstripTileWidth,
+                                    filmstripTileHeight: model.filmstripTileHeight,
+                                    waveformPeaks: model.waveformPeaks,
+                                    keyframes: model.keyframes
+                                })
                                 property color laneColor: Design.success
                             }
                         }
@@ -844,6 +895,11 @@ Rectangle {
             property bool hovered: false
             property var dragOrigins: ({})
             property var dragItems: ({})
+            // Drag and trim move the box through these offsets instead of assigning x/width
+            // directly: assigning would kill the bindings below, and with delegates that survive
+            // a dataChanged (instead of being recreated) a dead binding would stick forever.
+            property real dragDx: 0
+            property real dragDw: 0
             opacity: locked ? 0.55 : 1.0
             readonly property bool visual: clipData.kind !== "audio" && clipData.track !== 2
             readonly property real sourceDuration: Math.max(0.001, clipData.sourceDurationSec)
@@ -851,10 +907,17 @@ Rectangle {
             function sourceTimeAt(px) {
                 return clipData.sourceInSec + (px / root.pxPerSec) * clipData.speed
             }
+            // The drag machinery and the trim handles move the box by assigning x/width, which
+            // drops those bindings. Delegates now survive a dataChanged instead of being recreated,
+            // so a dropped binding would stick forever — re-arm it after the gesture commits.
+            function rebindGeometry() {
+                x = Qt.binding(() => clipData.timelineStartSec * root.pxPerSec + dragDx)
+                width = Qt.binding(() => Math.max(24, clipData.durationSec * root.pxPerSec) + dragDw)
+            }
 
-            x: clipData.timelineStartSec * root.pxPerSec
+            x: clipData.timelineStartSec * root.pxPerSec + dragDx
             y: 3
-            width: Math.max(24, clipData.durationSec * root.pxPerSec)
+            width: Math.max(24, clipData.durationSec * root.pxPerSec) + dragDw
             height: root.trackHeight - 6
             radius: Design.rXs
             color: Qt.darker(laneColor, 2.6)
@@ -1023,15 +1086,19 @@ Rectangle {
                         const dx = mapToGlobal(mouse.x, 0).x - startGlobalX
                         const maxDx = origW - 24
                         const clampedDx = Math.max(-origX, Math.min(maxDx, dx))
-                        clipBox.x = origX + clampedDx
-                        clipBox.width = origW - clampedDx
+                        clipBox.dragDx = clampedDx
+                        clipBox.dragDw = -clampedDx
                     }
                     onReleased: {
-                        const newStart = Math.max(0, clipBox.x / root.pxPerSec)
+                        const newStart = Math.max(0, clipData.timelineStartSec + clipBox.dragDx / root.pxPerSec)
                         const deltaSec = newStart - clipData.timelineStartSec
-                        const newDur = Math.max(0.2, clipBox.width / root.pxPerSec)
+                        const baseW = Math.max(24, clipData.durationSec * root.pxPerSec)
+                        const newDur = Math.max(0.2, (baseW + clipBox.dragDw) / root.pxPerSec)
                         const newSourceIn = Math.max(0, clipData.sourceInSec + deltaSec * clipData.speed)
                         Backend.trimClip(clipData.id, newStart, newDur, newSourceIn)
+                        // The commit updated the row; the bindings carry the values from here on.
+                        clipBox.dragDx = 0
+                        clipBox.dragDw = 0
                     }
                 }
             }
@@ -1107,7 +1174,8 @@ Rectangle {
                 onPositionChanged: (mouse) => {
                     if (!drag.active || clipBox.locked)
                         return
-                    // Same snapping rule the commit will use, so the guide never lies.
+                    // Same snapping rule the commit will use, so the guide never lies. clipBox.x
+                    // already carries the drag distance: the drag machinery moved it this event.
                     const snapped = Backend.previewSnap(clipData.id, Math.max(0, clipBox.x / root.pxPerSec), clipData.track)
                     clipBox.x = snapped * root.pxPerSec
                     const grabX = clipBox.dragOrigins[clipData.id]
@@ -1133,6 +1201,14 @@ Rectangle {
                             targetTrack = 0
                     }
                     Backend.moveSelectedClips(clipBox.x / root.pxPerSec - pressStartSec, targetTrack - pressTrack)
+                    // The drag assigned x imperatively on every moved item, dropping the x
+                    // bindings; re-arm them so the committed row data keeps moving the delegates.
+                    for (const id of Backend.selectedClipIds) {
+                        const item = clipBox.dragItems[id]
+                        if (item)
+                            item.rebindGeometry()
+                    }
+                    clipBox.rebindGeometry()
                     clipBox.dragOrigins = ({})
                     clipBox.dragItems = ({})
                 }
@@ -1162,11 +1238,14 @@ Rectangle {
                     onPositionChanged: (mouse) => {
                         if (!pressed) return
                         const dx = mapToGlobal(mouse.x, 0).x - startX
-                        clipBox.width = Math.max(24, (origDur + dx / root.pxPerSec) * root.pxPerSec)
+                        const baseW = Math.max(24, origDur * root.pxPerSec)
+                        clipBox.dragDw = Math.max(24 - baseW, dx)
                     }
                     onReleased: {
-                        const newDur = Math.max(0.2, clipBox.width / root.pxPerSec)
+                        const baseW = Math.max(24, clipData.durationSec * root.pxPerSec)
+                        const newDur = Math.max(0.2, (baseW + clipBox.dragDw) / root.pxPerSec)
                         Backend.trimClip(clipData.id, clipData.timelineStartSec, newDur, clipData.sourceInSec)
+                        clipBox.dragDw = 0
                     }
                 }
             }

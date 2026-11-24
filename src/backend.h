@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cliplistmodel.h"
 #include "mediaengine.h"
 #include "project.h"
 #include <QElapsedTimer>
@@ -11,6 +12,8 @@
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <functional>
+
+class QAbstractListModel;
 
 class Backend : public QObject {
     Q_OBJECT
@@ -33,6 +36,9 @@ class Backend : public QObject {
 
     Q_PROPERTY(QVariantList assetsList READ assetsList NOTIFY assetsChanged)
     Q_PROPERTY(QVariantList clipsList READ clipsList NOTIFY timelineChanged)
+    // Row-level clip model for the timeline lanes: edits arrive as dataChanged for the changed
+    // row, so delegates are updated in place instead of being rebuilt on every timelineChanged.
+    Q_PROPERTY(QAbstractListModel *clipModel READ clipModel CONSTANT)
     Q_PROPERTY(int clipCount READ clipCount NOTIFY timelineChanged)
     Q_PROPERTY(QVariantList textsList READ textsList NOTIFY timelineChanged)
     Q_PROPERTY(int textCount READ textCount NOTIFY timelineChanged)
@@ -82,6 +88,7 @@ public:
 
     QVariantList assetsList() const;
     QVariantList clipsList() const;
+    QAbstractListModel *clipModel() const { return m_clipModel; }
     int clipCount() const;
     QVariantList textsList() const;
     int textCount() const;
@@ -232,6 +239,7 @@ private:
     void pruneClipSelection();
 
     Project m_project;
+    ClipListModel *m_clipModel = nullptr;
     QString m_projectPath;
     bool m_dirty = false;
     double m_playheadSec = 0.0;

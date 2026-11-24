@@ -7,6 +7,7 @@
 #include <QVideoFrame>
 #include <QVideoSink>
 #include <QtQml/qqmlregistration.h>
+#include <atomic>
 
 // Clip effects applied with the same math as the FFmpeg filters used on export
 // (eq -> boxblur -> vignette -> chromakey, in that order, on Y'CbCr values),
@@ -66,6 +67,10 @@ public:
 
     static QImage process(const QImage &source, const ClipLook &look);
 
+    // Pixels the CPU path has processed so far. The preview normally runs the look in a GPU
+    // shader, so this must not grow while a visible item re-renders; tests use it to prove it.
+    static qint64 cpuPixelsProcessed();
+
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override;
     void itemChange(ItemChange change, const ItemChangeData &data) override;
@@ -79,6 +84,8 @@ private:
     void setSource(const QImage &image, bool bt709);
     void setVideoFrame(const QVideoFrame &frame);
     void scheduleProcessing();
+    void applyLookChange();
+    double effectiveBlurRadius() const;
     ClipLook currentLook() const;
     bool canBeSeen() const;
     void resumeIfPending();
@@ -89,6 +96,8 @@ private:
     QVideoFrame m_sourceFrame; // decoded frame awaiting conversion, converted in the worker
     bool m_sourceBt709 = false;
     QImage m_output;
+    bool m_outputProcessed = false; // m_output came from the CPU fallback, not the shader input
+    std::atomic<bool> m_lastRunCpu{false};
     bool m_textureDirty = false;
     bool m_dirtyWhileBusy = false;
     bool m_pendingWhileUnseen = false;

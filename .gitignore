@@ -5,4 +5,17 @@ pkgbuild/src/
 pkgbuild/pkg/
 pkgbuild/*.pkg.tar.zst
 # tool caches
-.optim-jev/
+.optim-jev/*
+!.optim-jev/.gitignore
+!.optim-jev/jev_router/
+!.optim-jev/jev_router/rules.json
+!.optim-jev/jev_router/RULES.md
+!.optim-jev/jev_router/rules.codex.json
+!.optim-jev/jev_router/RULES.codex.md
+!.optim-jev/jev_router/rules.vibe.json
+!.optim-jev/jev_router/RULES.vibe.md
+# trail cache is tool state; learnings are committed
+.trail/cache/
+!.trail/
+!.trail/learnings/
+!.trail/learnings/*.md

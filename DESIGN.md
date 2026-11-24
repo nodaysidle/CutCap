@@ -191,11 +191,15 @@ selected).
 
 - **Panels are flat.** No rounded cards, no per-panel borders; panels butt together with a 1 px
   `borderHairline` seam and a hairline under every header. The window bed is `surfaceSunken`.
-- **Top bar is a command strip** 36 px tall: logo chip, project title as borderless text with an
-  accent underline on focus, `unsaved` flag, flat text actions, status right, accent Export.
-- **Media bin is a list, not cards.** 64 px rows with a hairline divider, 64×36 thumbnail, name
-  over one metadata line; the add/remove actions appear on hover only. Tabs became a small
-  segmented switch (`Bin / Captions / Voice`) in the panel header.
+- **Top bar is a command strip** `topBarH` (44 px) tall: two-bar brand mark, editable borderless
+  project-title field with a 1 px accent underline on focus, mono `UNSAVED` / `PREPARING` badges,
+  flat text actions (Import, Open, Save, Undo, Redo), right-aligned mono status, a `?` shortcuts
+  button, and the accent Export (showing progress while exporting). A 1 px hairline closes the strip.
+- **Media bin is a list, not cards.** The header is a `Media` title, a mono item count and a flat
+  `+ Import` — no tabs; captions and voiceover are inspector sections, text is added from the
+  timeline toolbar. Rows are 72 px with a hairline divider, a 3 px lane stripe, a 72×40 thumbnail,
+  and the name over one mono metadata line; on hover the metadata line swaps for `V1` / `V2` / `×`
+  actions without changing the row height.
 - **Inspector has no tabs.** One scrolling column: Look, Transform, Audio, Background — with the
   text sections shown instead when a text overlay is selected. Section labels are `tCaption`
   secondary over a hairline.

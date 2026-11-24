@@ -110,7 +110,27 @@ Rectangle {
 
     // Material's touch-sized controls (48-56px) spread the inspector out; desktop-dense versions.
     component CompactSlider: Slider {
+        id: slider
         implicitHeight: Design.hSmall
+        // Arrow keys adjust a slider the keyboard moved focus to; the application-level Left/Right
+        // playhead shortcuts must not fire on top of them. Focus from a click keeps the arrow keys
+        // global, the same rule Space follows on the other controls.
+        property bool focusFromMouse: false
+        onFocusChanged: if (!focus) focusFromMouse = false
+        Keys.onShortcutOverride: (event) => {
+            if (!slider.focusFromMouse && (event.key === Qt.Key_Left || event.key === Qt.Key_Right ||
+                                           event.key === Qt.Key_Up || event.key === Qt.Key_Down))
+                event.accepted = true
+        }
+        // Observes presses without taking them, so the slider still handles the drag itself.
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: false
+            onPressed: (mouse) => {
+                slider.focusFromMouse = true
+                mouse.accepted = false
+            }
+        }
     }
 
     component CompactComboBox: ComboBox {

@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "paths": {
+    "AGENTS.md": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "agent instructions; documentation"
+    },
+    "DESIGN.md": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "design system documentation"
+    },
+    "HANDOFF.2026-11-16.prev.md": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "archived previous handoff; documentation"
+    },
+    "HANDOFF.md": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "audit handoff notes; documentation"
+    },
+    "bin/": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "small build, install and test shell scripts"
+    },
+    "cutcap.pro": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "qmake project file; build config"
+    },
+    "cutcap.qmltypes": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "QML type registration metadata; likely generated"
+    },
+    "pkgbuild/": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "Arch packaging metadata and desktop entry; simple"
+    },
+    "src/": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "C++/Qt app core: backend, media engine, project model, CLI; moderately demanding"
+    },
+    "src/backend.cpp": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "largest file; central backend logic coupling UI, project and media engine; subtl"
+    },
+    "src/design.cpp": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "design constants helper; small, mechanical"
+    },
+    "src/mediaengine.cpp": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "media playback/export engine; subtle timing and threading invariants"
+    },
+    "src/project.cpp": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "project model and persistence; format invariants"
+    },
+    "src/qml/": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "QML UI views; feature work bound to theme and backend API"
+    },
+    "src/resources.qrc": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "Qt resource list; must match files in src/qml"
+    },
+    "src/theme.cpp": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "theme/design tokens implementation; follows DESIGN.md"
+    },
+    "tests/": {
+      "write": [
+        "haiku",
+        "sonnet",
+        "opus"
+      ],
+      "why": "QtTest suite; mostly mechanical additions"
+    }
+  }
+}
