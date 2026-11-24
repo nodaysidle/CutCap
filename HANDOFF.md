@@ -352,3 +352,30 @@ on every position update (microseconds today, not worth doing until clip counts 
 Ideas the owner has not decided on: a desktop notification and idle-inhibit when an export
 finishes; a key to collapse the media bin or inspector by hand; remembering splitter positions
 and zoom between launches.
+
+---
+
+## Done — 2026-11-24 (commit `f584170`, pushed to `origin/master`)
+
+All 7 open-work items from the section above are done. Before/after: **61 → 71 tests, 0 failed**,
+`./bin/build` exit 0, qmllint exit 0, suite time ~64 s (was ~65 s despite +10 tests).
+
+| # | Item | What changed | Test / proof |
+|---|------|--------------|--------------|
+| 3 | Arrow keys on slider moved playhead | `Keys.onShortcutOverride` on `CompactSlider` in `src/qml/InspectorPanel.qml` accepts Left/Right/Up/Down when keyboard-focused (same pattern plan 002 used for Space). `focusFromMouse` flag keeps click-focused sliders on global arrows. | `sliderArrowsAdjustSliderNotPlayhead` — tabs to a slider, sends Right, asserts slider value changed AND `playheadSec` unchanged. Fails when the override is removed. |
+| 4 | TTS text starting with `-` read as espeak option | `MediaEngine::buildEspeakTtsArgs()` (new helper in `src/mediaengine.{h,cpp}`) returns `{"-w", out, "--", text}`; `runLocalTts` uses it. Piper path untouched. | `testEspeakTtsArgsEndOptionsBeforeText` — asserts `"--"` at index 2, directly before text, for both `"-rf /etc/passwd"` and plain text. Fails when `--` is removed. |
+| 5 | Delegate churn on every edit | New `ClipListModel : QAbstractListModel` (`src/cliplistmodel.{h,cpp}`) with 36 roles. On `timelineChanged` it re-reads `clipsList()` once, diffs rows, emits `dataChanged(row,row)` only for changed rows; `beginResetModel` only on id-sequence change. `Backend::clipsList()` kept as C++ accessor (~40 test sites unchanged). `TimelinePanel.qml` Repeaters use `model: root.clipModel`; delegates survive edits; drag geometry uses `dragDx`/`dragDw` offsets with `rebindGeometry()` on release. `clipItemSnapshot()` still works (`objectName: "clipBody"` + `clipId` preserved). | `oneEditCreatesNoNewDelegates` — one `updateClipProperty` produces `dataChanged ≥ 1`, zero `modelReset/rowsInserted/rowsRemoved`, same delegate pointers before/after. `oneClipListBuildPerEdit` still passes. Fails when QML reverted to list-based. |
+| 6 | Preview look on CPU capped ~20 fps | GPU fragment shader `src/shaders/look.frag` (+`.qsb` baked via `qsb --qt6 --batchable`) implements the full `process()` pipeline (BT.601/709 RGB→YUV, eq, 2D box blur, vignette cos⁴, chroma key, YUV→premultiplied RGB). `LookNode`/`LookMaterial` in `src/clipframeitem.cpp` render via RHI in `updatePaintNode`. Worker thread only decodes+scales; look changes just move uniforms. Identity looks and blur radius >16 px keep CPU/plain-texture paths. `process()` unchanged as CPU reference. | `gpuLookShaderMatchesCpuProcess` — real RHI render vs `process()`, max per-channel delta ≤ 2 (measured **1**). `gpuPreviewSkipsCpuPixelLoop` — 1400×788 frame, CPU timings recorded (sat 47 ms, blur r8 55 ms, chroma 49 ms) vs GPU path (0 ms CPU pixel work). Both fail when shader/node is broken. |
+| 7 | 580-line UI smoke test | Split into 6 tests: `uiSmokeWindowBuilds`, `uiSmokeButtonsFitLabels`, `uiSmokePipTransform`, `uiSmokeDragAndDrop`, `uiSmokeTimelineEditing`, `uiSmokeLayoutAtSizes`. Shared `UiHarness` helper + `uiSampleVideo`/`uiSampleTone`. Fixed `qWait`→`QTRY_*_WITH_TIMEOUT`. | 187 assertion macros (was 139 — none dropped), 0 failed. Split UI tests run in 6.5 s (was ~11 s). |
+| — | dbus unused | `dbus` removed from `QT +=` in `cutcap.pro` (zero usages in `src/`). | Build + 71 tests pass. |
+| — | DESIGN.md §5 stale | Updated top bar (`topBarH` 44 px, actual contents) and media bin (72 px rows, 72×40 thumb, no tabs) to match current QML. No token or visual changes. | — |
+
+Also in this commit: `.optim-jev/` rules (jev-route init), `.trail/learnings/` (GPU shader RHI gotchas),
+`graft/` and `.ignore` removed. Repo pushed to `https://github.com/nodaysidle/CutCap` (public).
+
+### Still open (not in the 7 above)
+
+- PKGBUILD `check()` never run in a clean chroot (item 1 above).
+- Live CPU measurement of the unseen-preview gate on Hyprland (item 2 above).
+- Per-playhead-tick lane map rebuilds (microseconds; deferred until clip counts grow).
+- Undecided ideas: export-finished notification + idle-inhibit; manual panel collapse key; remembering splitter positions and zoom between launches.
